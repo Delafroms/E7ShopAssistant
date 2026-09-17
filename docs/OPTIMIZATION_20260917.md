@@ -70,7 +70,7 @@
 
 另外覆盖：售罄翻转（flip）、远处售罄文本不污染本行、reset 语义、空候选不崩。
 
-### 5. 清理编译警告（16 → 8）
+### 5. 清理编译警告（19 → 12）
 
 | 警告 | 处理 |
 |---|---|
@@ -79,8 +79,10 @@
 | 3 处 deprecated 图标（`Icons.Filled.Article/List`） | 迁移到 `Icons.AutoMirrored.*` |
 | `MainActivity` 未使用的 `Article` import | 删除 |
 
-**保留未改的 8 条**（均为 deprecated API 迁移，涉及真机行为，需回归验证）：
-`systemUiVisibility` 6 处（沉浸式全屏）、Shizuku `newProcess`、`SCREEN_DIM_WAKE_LOCK`。
+**保留未改的 12 条**（均为 deprecated API 迁移，涉及真机行为，需回归验证）：
+`systemUiVisibility` 6 处（沉浸式全屏）、Shizuku `newProcess`、`SCREEN_DIM_WAKE_LOCK`、
+`EquipmentScoreActivity` 的 `startActivityForResult` 与未标注的 override 各 1 处、
+`DiagnosticsRunner` 未使用变量 1 处。
 
 ---
 
@@ -90,7 +92,7 @@
 |---|---|
 | 单元测试 | **66 个全绿**（原 55 + 新增 11），0 失败 |
 | `assembleRelease` | BUILD SUCCESSFUL |
-| 编译警告 | 16 → **8** |
+| 编译警告 | **19 → 12**（前后均以 `compileReleaseKotlin --rerun-tasks` 全量重编译统计，条件一致） |
 | APK 签名 | SHA-256 `ff396fba…120534` —— 与线上版本**完全一致**，可覆盖安装 |
 | APK 体积 | 47.8MB（与优化前一致） |
 
