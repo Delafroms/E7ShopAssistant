@@ -235,8 +235,12 @@ class AiBotEngine(
                     target = t
                     recycle(bmp)
                     host.hesitate()
-                    host.log("E7SA.AI", "buy ${t.kind} button=CLICKABLE tap=(${loc.pt!!.first.toInt()},${loc.pt!!.second.toInt()})")
-                    host.guardedTap(loc.pt!!.first, loc.pt!!.second, "aiRowBuy")
+                    // rowButtonState 契约：state=CLICKABLE 时必然带非空坐标
+                    // （E1 路径由 modelButton 非空返回，色块路径由质心成功返回）。
+                    // 先取出再使用，避免同一表达式里重复 !! 触发编译器警告。
+                    val pt = loc.pt!!
+                    host.log("E7SA.AI", "buy ${t.kind} button=CLICKABLE tap=(${pt.first.toInt()},${pt.second.toInt()})")
+                    host.guardedTap(pt.first, pt.second, "aiRowBuy")
                     return Phase.VERIFY_DIALOG
                 }
                 // 先记账，等本轮所有行看完后用**同一张新帧**统一复核（见 confirmSkips）
@@ -612,9 +616,25 @@ class AiBotEngine(
         return bmp to r
     }
 
-    /** 轻量探测包装（只为稳定判定服务，结果不参与决策）。 */
+    /**
+     * 轻量探测包装（只为稳定判定服务，结果不参与决策）。
+     *
+     * 失败不向上抛 —— 探测只决定"画面还在不在动"，它不是决策依据，
+     * 抛出去会打断整条稳定判定链路。捕 Throwable 而非 Exception 与项目内
+     * 其他 native 调用（YoloDet / PpOcr）保持一致：native 失败可能表现为
+     * UnsatisfiedLinkError 这类 Error。
+     *
+     * **但必须留痕**：这是全项目唯一一处完全静默的 catch。静默会让
+     * "探测持续失败"表现为"画面一直不稳定"，最终卡在 WAIT 阶段，
+     * 而日志里查不到任何原因。这里每帧都会调用，正常情况下不应失败，
+     * 一旦刷屏本身就是最直接的故障信号。
+     */
     private fun engine_hasIconFast(bmp: Bitmap) {
-        try { vision.hasIconFast(bmp) } catch (e: Throwable) { }
+        try {
+            vision.hasIconFast(bmp)
+        } catch (e: Throwable) {
+            host.log("E7SA.AI", "hasIconFast failed: ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 
     /* ---------------- 阶段：恢复与等待 ---------------- */

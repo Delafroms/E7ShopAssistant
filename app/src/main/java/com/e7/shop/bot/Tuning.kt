@@ -154,9 +154,12 @@ object Tuning {
      * 点击偏移的硬上限（像素）。
      *
      * E7 按钮高度普遍 80px 以上，4px 偏移绝不会越出按钮边界。
-     * 设置里允许 0~20，但实际一律夹到 4 —— 更大的偏移会点空。
+     *
+     * **唯一定义处是 [com.e7.shop.data.AppConfig.TAP_OFFSET_MAX_PX]**，此处仅作别名：
+     * UI 滑杆上限、配置读写夹取、运行时夹取三者共用同一个值，改一处即全链路生效。
+     * （旧注释称"设置里允许 0~20"，与 SettingsSchema 实际夹取的 0~4 相互矛盾，已修正。）
      */
-    const val TAP_OFFSET_MAX_PX = 4
+    const val TAP_OFFSET_MAX_PX = com.e7.shop.data.AppConfig.TAP_OFFSET_MAX_PX
 
     /** 疲劳漂移：在 [FATIGUE_RAMP_MINUTES] 分钟内从 0 线性升到 [FATIGUE_MAX]。 */
     const val FATIGUE_RAMP_MINUTES = 120.0

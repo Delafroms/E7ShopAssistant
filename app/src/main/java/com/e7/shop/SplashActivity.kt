@@ -32,10 +32,11 @@ class SplashActivity : AppCompatActivity() {
         val text = findViewById<TextView>(R.id.splashText)
 
         // fade + scale in with a non-linear circle easing
+        // （ValueAnimator 由 apply 块内的 start() 自持，无需外部引用变量）
         text.alpha = 0f
         text.scaleX = 0.7f
         text.scaleY = 0.7f
-        val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+        ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 700
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { a ->

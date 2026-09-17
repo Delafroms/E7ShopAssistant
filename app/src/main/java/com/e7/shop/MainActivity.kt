@@ -45,11 +45,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -211,7 +210,7 @@ private fun MainScreen(cfg: AppConfig, theme: com.e7.shop.ui.E7Theme, onChangeAp
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 val items = listOf(
                     Triple("home", stringResource(R.string.nav_home), Icons.Filled.Home),
-                    Triple("records", stringResource(R.string.nav_records), Icons.Filled.List),
+                    Triple("records", stringResource(R.string.nav_records), Icons.AutoMirrored.Filled.List),
                     Triple("profile", stringResource(R.string.nav_user), Icons.Filled.Person),
                     Triple("settings", stringResource(R.string.nav_settings), Icons.Filled.Settings)
                 )

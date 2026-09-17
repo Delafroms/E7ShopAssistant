@@ -379,6 +379,13 @@ class BotEngine(
         val xC = w * host.cfg.swipeCenterX
         var shotFails = 0
         // 与 slot6Check 同一判据：连续 2 次"没动"才算到底（详见该函数的说明）
+        //
+        // ⚠ 已知不一致（2026-09-17 代码审查发现，本次**未改动**）：
+        //   本函数滑动几何取自 AppConfig：swipeBottomY(0.46) → swipeTopY(0.19)，跨度 0.27h；
+        //   slot6Check 取自 Tuning：SWIPE_LOW_Y(0.86) → SWIPE_HIGH_Y(0.14)，跨度 0.72h。
+        //   两者目标同为"揭示第 6 格"、判据也相同，跨度却相差约 2.7 倍。
+        //   未擅自统一的原因：滑动几何直接决定真机手势幅度，改动必须先在真机回归台上
+        //   验证"第 6 格确实露出且不漏买"，否则就是在没有证据的情况下替换一个已验证行为。
         var stillStreak = 0
         for (attempt in 0 until Tuning.SLOT6_MAX_ATTEMPTS) {
             val before = host.screenshot()

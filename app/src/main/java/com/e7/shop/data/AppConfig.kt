@@ -20,6 +20,20 @@ class AppConfig(context: Context) {
     private val sp: SharedPreferences =
         context.getSharedPreferences("e7_config", Context.MODE_PRIVATE)
 
+    companion object {
+        /**
+         * 拟人化点击偏移的**硬上限**（像素）—— UI 可设范围与运行时夹取范围的唯一来源。
+         *
+         * 为什么上限是 4：E7 的按钮高度普遍在 80px 以上，4px 的随机偏移绝不会越出
+         * 按钮边界；再大就有"点空"风险（点空 = 本次操作无效，最坏情况是碰到相邻行）。
+         *
+         * 为什么定义在 data 层：`ui`（SettingsSchema 决定滑杆上限）与 `bot`（Humanizer
+         * 运行时夹取）都必须与它一致，而 ui / data 两个包都不依赖 bot，
+         * 因此不能放在 `bot/Tuning`。
+         */
+        const val TAP_OFFSET_MAX_PX = 4
+    }
+
     /* ---- bot settings ---- */
     var buyBookmark: Boolean
         get() = sp.getBoolean("buyBookmark", true)
@@ -88,9 +102,16 @@ class AppConfig(context: Context) {
         get() = sp.getInt("delayMax", 1100)
         set(v) = sp.edit().putInt("delayMax", v).apply()
 
+    /**
+     * 拟人化点击偏移（像素），取值范围 [0, [TAP_OFFSET_MAX_PX]]。
+     *
+     * getter 与 setter 都夹取：旧版默认值是 8（已超出上限），且只有 UI 的 setter 夹取，
+     * 于是老用户的设置页显示 8、实际生效却是 4 —— 典型的"显示与实际不符"。
+     * getter 一并夹取后，显示值与生效值恒等。
+     */
     var offsetPx: Int
-        get() = sp.getInt("offsetPx", 8)
-        set(v) = sp.edit().putInt("offsetPx", v).apply()
+        get() = sp.getInt("offsetPx", TAP_OFFSET_MAX_PX).coerceIn(0, TAP_OFFSET_MAX_PX)
+        set(v) = sp.edit().putInt("offsetPx", v.coerceIn(0, TAP_OFFSET_MAX_PX)).apply()
 
     var randomRest: Boolean
         get() = sp.getBoolean("randomRest", true)

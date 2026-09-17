@@ -67,7 +67,9 @@ object SettingsSchema {
             listOf(
                 SettingItem.Number(R.string.delay_min, { cfg.delayMinMs.toLong() }, { cfg.delayMinMs = it.toInt() }),
                 SettingItem.Number(R.string.delay_max, { cfg.delayMaxMs.toLong() }, { cfg.delayMaxMs = it.toInt() }),
-                SettingItem.Number(R.string.tap_offset, { cfg.offsetPx.toLong() }, { cfg.offsetPx = it.toInt().coerceIn(0, 4) }),
+                // 上限引用 AppConfig.TAP_OFFSET_MAX_PX（单一来源），不再写死字面量 4：
+                // 该值同时被 Humanizer 运行时夹取使用，两处必须恒等。
+                SettingItem.Number(R.string.tap_offset, { cfg.offsetPx.toLong() }, { cfg.offsetPx = it.toInt().coerceIn(0, AppConfig.TAP_OFFSET_MAX_PX) }),
                 SettingItem.Switch(R.string.random_rests, { cfg.randomRest }, { cfg.randomRest = it }),
                 // D4 审计补入口：restEvery 一直在 Humanizer 里生效（每 N 次操作休息一次），
                 // 却没有任何 UI 能改它 —— 属于"能生效但用户够不着"的半截功能，这里补上。
