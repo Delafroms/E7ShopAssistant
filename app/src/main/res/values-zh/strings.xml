@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">E7 商店助手</string>
+    <string name="accessibility_label">E7 商店助手服务</string>
+    <string name="accessibility_desc">用于模拟拟人化点击与滑动，实现第七史诗秘密商店自动刷取。需用户明确开启。</string>
+    <string name="logo_text">EPIC SEVEN</string>
+    <string name="logo_subtitle">E7 商店助手 · 自动刷书签/神秘奖牌</string>
+
+    <!-- home -->
+    <string name="not_running">未运行</string>
+    <string name="checking">检查商品中…</string>
+    <string name="buying">发现目标！购买中…</string>
+    <string name="refreshing">刷新商店中…</string>
+    <string name="resting">休息中…</string>
+    <string name="waiting_game">等待第七史诗商店界面…</string>
+    <string name="paused">已暂停</string>
+    <string name="session_status">会话状态</string>
+    <string name="bookmarks">书签</string>
+    <string name="mystic_medals">神秘奖牌</string>
+    <string name="refreshes">刷新次数</string>
+    <string name="sky_spent">消耗天空石</string>
+    <string name="gold_spent">消耗金币</string>
+    <string name="run_time">本次时长</string>
+    <string name="stat_lbl_bookmark">📖 书签</string>
+    <string name="stat_lbl_medal">🏅 神秘奖牌</string>
+    <string name="stat_lbl_refresh">🔄 刷新</string>
+    <string name="stat_lbl_sky">💎 天空石</string>
+    <string name="stat_lbl_gold">💰 金币</string>
+    <string name="stat_lbl_time">⏱ 本次</string>
+    <string name="today_runtime">今日时长</string>
+    <string name="total_runtime">总时长</string>
+    <string name="start">开始</string>
+    <string name="pause">暂停</string>
+    <string name="stop">停止</string>
+    <string name="risk_title">风险警告</string>
+    <string name="risk_notice">自动化操作可能违反游戏条款并有封号风险。本工具已内置拟人化操作以降低风险，但无法保证 100% 安全，请自行评估并承担后果。</string>
+
+    <!-- records -->
+    <string name="records_title">成本与收获 · 累计记录</string>
+    <string name="runs">运行次数</string>
+    <string name="total_time">累计时长</string>
+    <string name="upload_records">上传云端记录（坚果云）</string>
+    <string name="download_records">下载云端记录</string>
+    <string name="history">历史会话</string>
+    <string name="no_history">暂无历史记录</string>
+
+    <!-- user -->
+    <string name="user_title">用户 · 云端账号</string>
+    <string name="user_desc">登录注册需要自建服务器，故改用坚果云 WebDAV 作为云端账号：绑定后记录可跨手机同步。</string>
+    <string name="server_url">服务器地址</string>
+    <string name="account">坚果云账号（邮箱）</string>
+    <string name="app_password">应用密码（坚果云官网生成，非登录密码）</string>
+    <string name="remote_dir">云端目录名（留空则放根目录）</string>
+    <string name="test_conn">测试连接</string>
+    <string name="save_account">保存账号</string>
+    <string name="how_get_pw">如何获取应用密码：坚果云官网 → 账户信息 → 安全选项 → 添加应用密码。</string>
+
+    <!-- settings -->
+    <string name="settings_title">设置</string>
+    <string name="bot_settings">机器人参数</string>
+    <string name="buy_bookmark">购买圣约书签</string>
+    <string name="buy_medal">购买神秘奖牌</string>
+    <string name="sky_budget">天空石预算上限（0=不限）</string>
+    <string name="cap_bookmark">书签持有上限（达到此数量即停，0=不限）</string>
+    <string name="cap_medal">神秘奖牌持有上限（达到此数量即停，0=不限）</string>
+    <string name="gold_spend_cap">金币消耗上限（刷新花费超过即停，0=关闭）</string>
+    <string name="sleep_mode">睡眠模式（完整识别，更慢但最稳）</string>
+    <string name="auto_lock_on_done">预算用完后自动熄屏</string>
+    <string name="speed_mult">运行速度倍数 1-3（越快循环越快，收益相同）</string>
+    <string name="ocr_engine">识图引擎</string>
+    <string name="appearance_dark">Steam · 深色卡片</string>
+    <string name="appearance_oled">Steam · OLED 纯黑</string>
+    <string name="appearance_ba">Blue Archive · 明亮学院</string>
+    <string name="ocr_engine_note">内置=稳定默认；GPU=配置好的手机更快；OpenCV=雷姆同款模板匹配（最难漏掉商品）</string>
+    <string name="ocr_engine_builtin">内置识图模板（推荐、默认、稳定）</string>
+    <string name="ocr_engine_gpu">GPU识图计算（消耗大，配置差不建议）</string>
+    <string name="ocr_engine_opencv">OpenCV（雷姆助手同款识图引擎）</string>
+    <string name="gpu_capture">GPU计算 · 帧数捕捉</string>
+    <string name="gpu_capture_note">开启GPU识图时，按此帧率采样商店屏幕并用GPU匹配。60fps 最顺滑、最快抓到商品（GPU负载高）；30fps 负载减半。</string>
+    <string name="changelog">更新日志</string>
+    <string name="save_bot">保存脚本设置</string>
+    <string name="humanize_settings">拟人化设置（降低检测风险）</string>
+    <string name="delay_min">操作间隔下限(ms)</string>
+    <string name="delay_max">操作间隔上限(ms)</string>
+    <string name="tap_offset">点击偏移像素(0-4)</string>
+    <string name="random_rests">随机休息</string>
+    <string name="rest_every">休息间隔（每 N 次操作）</string>
+    <string name="save_humanize">保存拟人化设置</string>
+    <string name="about">关于</string>
+    <string name="about_text">E7 商店助手 v2.1.0 · 仅供个人非商业使用</string>
+    <string name="language">语言 / Language</string>
+    <string name="lang_system">跟随系统</string>
+    <string name="lang_chinese">中文</string>
+    <string name="lang_english">English</string>
+    <string name="top_logo">顶部 Logo</string>
+    <string name="logo_text_mode">金色 \"EPIC SEVEN\" 文字</string>
+    <string name="logo_official_mode">官方 Epic Seven Logo 图片</string>
+    <string name="logo_custom_mode">自定义 Logo 图片</string>
+    <string name="appearance">配色</string>
+    <string name="bg_image_path">自定义背景图路径（只改背景，顶部底部不变；留空=默认渐变）</string>
+    <string name="bg_hint">/sdcard/Pictures/bg.png</string>
+    <string name="pick_bg">选图</string>
+    <string name="save_appearance">保存配色</string>
+    <string name="appearance_saved">配色已保存</string>
+        <string name="anim_settings">动画设置</string>
+    <string name="show_splash">显示进入动画</string>
+    <string name="log_level">运行日志详细度</string>
+    <string name="floaty_reset_pos">悬浮窗位置已重置</string>
+    <string name="log_level_off">关闭</string>
+    <string name="log_level_normal">精简</string>
+    <string name="log_level_detail">详细</string>
+    <string name="log_level_debug">调试</string>
+    <string name="log_path">日志：Android/data/com.e7.shop/files/e7sa_run.log</string>
+    <string name="anim_easing">切换动画函数</string>
+    <string name="anim_easing_variant">方向</string>
+    <string name="anim_easing_strength">强度</string>
+    <string name="anim_easing_in">In 加速</string>
+    <string name="anim_easing_out">Out 减速</string>
+    <string name="anim_easing_inout">In-Out 先加速后减速</string>
+    <string name="anim_easing_beat">Beat 冰火节拍</string>
+    <string name="anim_easing_quad">Quad 二次</string>
+    <string name="anim_easing_cubic">Cubic 三次</string>
+    <string name="anim_easing_quart">Quart 四次</string>
+    <string name="anim_easing_expo">Expo 指数</string>
+    <string name="anim_easing_circ">Circ 圆弧</string>
+    <string name="floaty_title">悬浮窗</string>
+    <string name="floaty_label">运行时显示悬浮窗</string>
+    <string name="floaty_perm_needed">请授予「显示在其他应用上层」权限</string>
+    <string name="float_start">开始</string>
+    <string name="float_pause">暂停</string>
+    <string name="float_stop">停止</string>
+    <string name="float_engine_yolo">YOLO</string>
+    <string name="float_engine_trad">传统</string>
+    <string name="float_close">关闭</string>
+    <string name="float_lbl_bookmark">书签</string>
+    <string name="float_lbl_medal">奖牌</string>
+    <string name="float_lbl_refresh">刷新</string>
+    <string name="float_lbl_sky">钻石</string>
+    <string name="float_lbl_gold">金币</string>
+    <string name="float_lbl_time">本次</string>
+    <string name="float_running">运行中</string>
+    <string name="float_paused_txt">已暂停</string>
+    <string name="float_deck_title">E7SA · 任务面板</string>
+    <string name="float_log_title">事件日志</string>
+    <string name="float_log_started">任务开始</string>
+    <string name="float_log_finished">任务结束</string>
+    <string name="float_log_paused">已暂停</string>
+    <string name="float_log_resumed">已恢复</string>
+    <string name="float_log_bookmarks">书签 %1$d</string>
+    <string name="float_log_medals">神秘奖牌 %1$d</string>
+    <string name="float_log_refresh">刷新 %1$d</string>
+    <string name="float_log_error">⚠ %1$s</string>
+    <string name="float_model_ok">模型就绪</string>
+    <string name="float_model_na">模型缺失</string>
+    <string name="float_shot_ok">截图正常 ×%1$d</string>
+    <string name="float_shot_fail">截图失败</string>
+    <string name="update_title">更新</string>
+    <string name="check_update">检查更新</string>
+    <string name="update_latest">已是最新版本</string>
+    <string name="update_checking">正在检查…</string>
+
+    <!-- nav -->
+    <string name="nav_home">运行</string>
+    <string name="nav_records">记录</string>
+    <string name="nav_user">我的</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- dialogs / toasts -->
+    <string name="dlg_risk_title">⚠️ 自动化风险警告</string>
+    <string name="dlg_risk_msg">自动刷商店属于游戏自动化行为，\n可能违反第七史诗服务条款，存在封号风险。\n\n本工具已内置拟人化操作（随机延迟、点击偏移、\n随机休息）以降低被检测的概率，\n但无法保证 100% 安全。\n\n请确认你已完全了解并自愿承担此风险，\n确认后才会允许运行。</string>
+    <string name="dlg_accept_risk">我已了解风险，继续</string>
+    <string name="dlg_cancel">取消</string>
+    <string name="dlg_res_title">输入当前资源</string>
+    <string name="dlg_res_msg">用于预算保护。金币：</string>
+    <string name="dlg_gold_hint">当前金币（0=跳过）</string>
+    <string name="toast_already_running">已在运行</string>
+    <string name="toast_not_running">未在运行</string>
+    <string name="toast_resumed">已继续</string>
+    <string name="toast_paused">已暂停</string>
+    <string name="toast_stopping">正在停止…</string>
+    <string name="toast_risk_confirmed">风险已确认</string>
+    <string name="toast_started">已启动，请切换到游戏商店界面</string>
+    <string name="toast_risk_required">风险警告未确认，无法运行</string>
+    <string name="toast_templates_required">图标模板尚未采集</string>
+    <string name="err_sky_budget">已达到钻石消耗上限</string>
+    <string name="err_gold_cap">金币消耗达到上限（已花费 %1$s），已停止</string>
+    <string name="err_bookmark_cap">书签持有达到上限（%1$d 张），已停止</string>
+    <string name="err_medal_cap">神秘奖牌持有达到上限（%1$d 个），已停止</string>
+    <!-- equipment score -->
+    <string name="score_entry">装备算分（从截图）</string>
+    <string name="score_title">装备算分</string>
+    <string name="score_pick">选择装备截图</string>
+    <string name="score_analyzing">正在识别…</string>
+    <string name="score_total">总分</string>
+    <string name="score_stats">识别到的属性</string>
+    <string name="score_no_stats">未识别到属性，请使用清晰的装备详情截图。</string>
+    <string name="score_ocr_failed">文字识别失败</string>
+    <string name="toast_enable_accessibility">请先开启无障碍服务</string>
+    <string name="toast_bind_cloud_first">请先在「用户」页绑定坚果云账号</string>
+    <string name="toast_account_saved">账号已保存</string>
+    <string name="toast_bot_saved">脚本设置已保存</string>
+    <string name="toast_human_saved">拟人化设置已保存</string>
+    <string name="toast_lang_changed">语言已切换</string>
+    <string name="tpl_drag_hint_bookmark">在书签图标上拖动框选，松开即保存。双击取消。</string>
+    <string name="tpl_drag_hint_medal">在神秘奖牌图标上拖动框选，松开即保存。双击取消。</string>
+    <string name="tpl_saved">模板已保存！</string>
+    <string name="tpl_save_failed">保存失败</string>
+    <string name="tpl_too_small">框选区域太小，请重试</string>
+    <string name="tpl_cancelled">已取消</string>
+    <string name="tpl_no_service">无障碍服务未开启</string>
+    <string name="tpl_shot_failed">截图失败</string>
+    <string name="view_shot">查看上次截图（脚本看到什么）</string>
+    <string name="diag_shot_ok">截图正常</string>
+    <string name="diag_shot_fail">截图失败 —— 脚本看不见画面</string>
+
+    <!-- V1 界面与引擎提示 -->
+    <string name="svc_not_enabled">无障碍服务未开启</string>
+    <string name="home_hint">点击「开始」启动 E7SA。中途打断后再次点击「开始」，会结束上一轮任务、清空本轮统计，并从当前画面重新识别、自动恢复运行（残留弹窗会被自动关闭）。</string>
+    <string name="click_logic">点击逻辑</string>
+    <string name="click_traditional">传统点击</string>
+    <string name="click_traditional_desc">录制动作 / 预设动作逻辑：稳定、兼容现有方案</string>
+    <string name="click_ai">AI 点击（推荐）</string>
+    <string name="click_ai_desc">YOLO 视觉识别 + 自主点击决策：观察→判断→点击闭环；无法确定时明确报告，绝不回退传统点击</string>
+    <string name="click_ai_engine_note">AI 点击固定使用 YOLO 视觉（与上方「识图引擎」设置相互独立）</string>
+    <string name="err_ai_yolo_missing">AI 点击需要 YOLO 视觉模型，模型不可用——请切换传统点击，或等待模型加载完成</string>
+    <string name="err_ai_undecided">AI 点击无法确定下一步操作：%1$s</string>
+    <string name="restart_btn">重新开始</string>
+    <string name="resume_btn">继续</string>
+    <string name="last_stop_prefix">上次停止：%1$s</string>
+    <string name="shot_empty">暂无截图（先运行一次机器人）</string>
+    <string name="shot_dialog_title">最近截图（诊断）</string>
+    <string name="diag_raw_capture">正在后台抓取 20 张原始截图</string>
+    <string name="diag_benchmark_done">诊断基准已运行（logcat: E7SA.Benchmark）</string>
+    <string name="ocr_engine_yolo">YOLO 视觉识别</string>
+    <string name="ocr_engine_traditional">传统识图</string>
+    <string name="engine_yolo_missing">YOLO 模型未加载，将自动使用传统识图</string>
+    <string name="engine_yolo_desc">YOLO：神经图标检测（推荐）。模型不可用时会自动改用传统识图。</string>
+    <string name="engine_trad_desc">传统识图：经典图像分析，不依赖视觉模型，适用于低配置设备。</string>
+    <string name="rec_totals">累计统计</string>
+    <string name="rec_recent8">最近 8 次会话</string>
+    <string name="wd_sync_title">坚果云 WebDAV 同步</string>
+    <string name="wd_upload">上传</string>
+    <string name="wd_download">下载</string>
+    <string name="wd_test">测试</string>
+    <string name="wd_saved">WebDAV 设置已保存</string>
+    <string name="wd_save">保存 WebDAV 设置</string>
+    <string name="wd_ok_connection">连接成功</string>
+    <string name="wd_err_auth">账号或应用密码错误（401）</string>
+    <string name="wd_err_http">HTTP %1$d</string>
+    <string name="wd_err_network">网络错误：%1$s</string>
+    <string name="wd_ok_upload">上传成功</string>
+    <string name="wd_err_upload">上传失败 HTTP %1$d</string>
+    <string name="wd_ok_download">下载成功</string>
+    <string name="wd_err_no_file">云端暂无记录文件</string>
+    <string name="wd_err_download">下载失败 HTTP %1$d</string>
+    <string name="wd_err_insecure">服务器必须使用 HTTPS —— http:// 会以明文发送你的应用密码</string>
+    <string name="general">通用</string>
+    <string name="bg_pick">选择背景图</string>
+    <string name="clear">清除</string>
+    <string name="logo_title">顶部 Logo（仅图片，无文字）</string>
+    <string name="logo_official">官方 Logo</string>
+    <string name="logo_custom">自定义图片</string>
+    <string name="splash_credit">heyyo x E7SA</string>
+    <string name="err_recover_refresh_dlg">检测到刷新确认弹窗，正在安全关闭</string>
+    <string name="err_recover_buy_dlg">检测到购买弹窗，正在取消</string>
+    <string name="err_wait_timeout">长时间未检测到商店画面，已停止</string>
+    <string name="err_dialog_stuck">弹窗无法自动关闭，请手动处理</string>
+    <string name="err_no_confirm">未定位到确认按钮，正在取消刷新弹窗</string>
+    <string name="err_exception">异常：%1$s</string>
+    <string name="err_slot6_shot">第 6 格检查：截图失败，重试中（不刷新）</string>
+    <string name="err_recheck_shot">复查：截图失败，重试中（不刷新）</string>
+    <string name="err_swipe_shot">滑动检查：截图失败，重试中（不刷新）</string>
+    <string name="err_row_buy_failed">行购买失败 x%1$d（%2$s@%3$d），已跳过该行</string>
+    <string name="err_row_wrong_target">弹窗与目标不符（%1$s@%2$d）——点错了行，已放弃该行</string>
+    <string name="err_refresh_unverified">刷新未验证成功（商店列表无变化），不计数，重新观察</string>
+    <string name="err_gate_bad_point">点击闸门拒绝：坐标非法（%1$d,%2$d）</string>
+
+    <!-- Shizuku -->
+    <string name="shizuku_title">Shizuku 快捷设置</string>
+    <string name="shizuku_desc">Shizuku 运行时，E7SA 可一键开启无障碍服务；未安装 Shizuku 时此区域自动隐藏。</string>
+    <string name="acc_direct_desc">已获系统授权，可一键开启无障碍服务（重启与覆盖安装后依然有效）。</string>
+    <string name="shizuku_grant_btn">授予 Shizuku 权限</string>
+    <string name="shizuku_enable_acc">一键开启无障碍服务</string>
+    <string name="shizuku_working">正在执行…</string>
+</resources>

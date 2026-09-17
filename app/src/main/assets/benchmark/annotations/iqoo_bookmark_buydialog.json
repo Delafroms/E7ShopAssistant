@@ -1,0 +1,31 @@
+﻿{
+    "image":  "dev/positive/iqoo_bookmark_buydialog.jpg",
+    "metadata":  {
+                     "notes":  "iQoo书签购买弹窗",
+                     "device":  "iqoo-2400x1080"
+                 },
+    "negative_only":  false,
+    "scene":  "buy_dialog",
+    "resolution":  [
+                       2400,
+                       1080
+                   ],
+    "state":  "normal",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  535,
+                        "price":  184000,
+                        "cx":  1055,
+                        "bbox":  {
+                                     "y":  470,
+                                     "width":  130,
+                                     "height":  130,
+                                     "x":  990
+                                 },
+                        "kind":  "bookmark"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "proposed"
+}

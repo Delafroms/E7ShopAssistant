@@ -1,0 +1,30 @@
+﻿{
+    "image":  "dev/positive/bookmark_soldout.jpg",
+    "metadata":  {
+                     "notes":  "圣约书签购买后显示售空(0/1) - 用户提供的关键售罄样本"
+                 },
+    "negative_only":  false,
+    "scene":  "shop",
+    "resolution":  [
+                       2800,
+                       1272
+                   ],
+    "state":  "sold_out",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  492,
+                        "price":  184000,
+                        "cx":  1300,
+                        "bbox":  {
+                                     "y":  405,
+                                     "width":  180,
+                                     "height":  175,
+                                     "x":  1210
+                                 },
+                        "kind":  "bookmark"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "verified"
+}

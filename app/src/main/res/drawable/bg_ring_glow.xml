@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <!-- dashed glow ring: rotates around the power core while the bot runs -->
+    <stroke
+        android:width="4dp"
+        android:color="#55D4AF37"
+        android:dashWidth="26dp"
+        android:dashGap="14dp" />
+    <solid android:color="@android:color/transparent" />
+</shape>

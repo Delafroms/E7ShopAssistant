@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "after-quality-refactor",
+    "timestamp":  "2026-09-17T15:45:18",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  540,
+    "medianMs":  635,
+    "p95Ms":  690,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  540,
+                        "medianMs":  635,
+                        "p95Ms":  690
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  290,
+                        "medianMs":  366,
+                        "p95Ms":  424
+                    }
+                ],
+    "pass":  true
+}

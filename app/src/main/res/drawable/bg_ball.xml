@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- outer glow -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#33C5A468" />
+            <size android:width="100dp" android:height="100dp" />
+        </shape>
+    </item>
+    <!-- main ball body -->
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:type="linear"
+                android:angle="45"
+                android:startColor="#FFE9B0"
+                android:centerColor="#C5A468"
+                android:endColor="#8F6E2B" />
+            <stroke android:width="2dp" android:color="#FFE9B0" />
+        </shape>
+    </item>
+</layer-list>

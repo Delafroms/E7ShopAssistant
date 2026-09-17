@@ -1,0 +1,27 @@
+﻿{
+    "image":  "dev/positive/bookmark_buydialog.jpg",
+    "negative_only":  false,
+    "scene":  "buy_dialog",
+    "resolution":  [
+                       2800,
+                       1272
+                   ],
+    "state":  "normal",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  628,
+                        "price":  184000,
+                        "cx":  1223,
+                        "bbox":  {
+                                     "y":  545,
+                                     "width":  175,
+                                     "height":  165,
+                                     "x":  1135
+                                 },
+                        "kind":  "bookmark"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "verified"
+}

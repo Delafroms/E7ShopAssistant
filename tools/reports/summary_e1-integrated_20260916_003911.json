@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "e1-integrated",
+    "timestamp":  "2026-09-16T00:39:11",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  494,
+    "medianMs":  541,
+    "p95Ms":  630,
+    "engines":  [
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  419,
+                        "medianMs":  496,
+                        "p95Ms":  525
+                    },
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  494,
+                        "medianMs":  541,
+                        "p95Ms":  630
+                    }
+                ],
+    "pass":  true
+}

@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "fix-rowmisalign",
+    "timestamp":  "2026-09-16T13:28:32",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  632,
+    "medianMs":  693,
+    "p95Ms":  730,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  632,
+                        "medianMs":  693,
+                        "p95Ms":  730
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  432,
+                        "medianMs":  504,
+                        "p95Ms":  532
+                    }
+                ],
+    "pass":  true
+}

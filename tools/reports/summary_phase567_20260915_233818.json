@@ -1,0 +1,14 @@
+﻿{
+    "tag":  "phase567",
+    "timestamp":  "2026-09-15T23:38:18",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  481,
+    "p95Ms":  583,
+    "pass":  true
+}

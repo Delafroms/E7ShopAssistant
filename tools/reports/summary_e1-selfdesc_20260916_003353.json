@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "e1-selfdesc",
+    "timestamp":  "2026-09-16T00:33:53",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  430,
+    "medianMs":  482,
+    "p95Ms":  535,
+    "engines":  [
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  386,
+                        "medianMs":  423,
+                        "p95Ms":  515
+                    },
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  430,
+                        "medianMs":  482,
+                        "p95Ms":  535
+                    }
+                ],
+    "pass":  true
+}

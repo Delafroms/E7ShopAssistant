@@ -1,0 +1,31 @@
+﻿{
+    "image":  "dev/positive/iqoo_medal_anim_soldout.jpg",
+    "metadata":  {
+                     "notes":  "iQoo奖牌(动画+售罄)",
+                     "device":  "iqoo-2400x1080"
+                 },
+    "negative_only":  false,
+    "scene":  "shop",
+    "resolution":  [
+                       2400,
+                       1080
+                   ],
+    "state":  "sold_out",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  610,
+                        "price":  280000,
+                        "cx":  1140,
+                        "bbox":  {
+                                     "y":  545,
+                                     "width":  130,
+                                     "height":  130,
+                                     "x":  1075
+                                 },
+                        "kind":  "medal"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "proposed"
+}

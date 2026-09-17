@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 机器人运行时保持屏幕常亮：防止系统自动锁屏（熄屏后无障碍截图拿不到画面，
+         机器人会因"截图失败"停摆）。普通权限，无需用户授权。 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 一键开启无障碍服务：直接写 Settings.Secure 的 enabled_accessibility_services。
+         这是 signature|privileged 级权限，普通安装拿不到，需要 adb 一次性授权：
+             adb shell pm grant com.e7.shop android.permission.WRITE_SECURE_SETTINGS
+         授权后重启/覆盖安装都保留（仅卸载重装后失效）。
+         相比 Shizuku：不依赖第三方 App、插拔 USB 不会掉；相比接 Stellar 的 AIDL：
+         不依赖被混淆的内部接口，它升级也不会失效。 -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <!-- Shizuku（可选快捷授权通道，无 Shizuku 时该功能完全静默） -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.E7Shop">
+
+        <activity
+            android:name=".SplashActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.E7Shop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.E7Shop" />
+
+        <activity
+            android:name=".score.EquipmentScoreActivity"
+            android:exported="false"
+            android:label="Equipment Score"
+            android:theme="@style/Theme.E7Shop" />
+
+        <!-- Accessibility service: tap/gesture simulation -->
+        <service
+            android:name=".ShopAccessibilityService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:label="@string/accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+            <!-- Android 14+ 要求 specialUse 类型声明子用途，否则 startForeground 抛异常 -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="shop automation keep-alive while the player farms" />
+        </service>
+
+    </application>
+</manifest>

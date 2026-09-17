@@ -1,0 +1,27 @@
+﻿{
+    "image":  "dev/positive/bookmark_buyable_row.jpg",
+    "negative_only":  false,
+    "scene":  "shop",
+    "resolution":  [
+                       2800,
+                       1272
+                   ],
+    "state":  "normal",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  505,
+                        "price":  184000,
+                        "cx":  1315,
+                        "bbox":  {
+                                     "y":  430,
+                                     "width":  140,
+                                     "height":  150,
+                                     "x":  1245
+                                 },
+                        "kind":  "bookmark"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "verified"
+}

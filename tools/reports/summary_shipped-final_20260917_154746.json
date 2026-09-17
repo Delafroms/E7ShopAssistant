@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "shipped-final",
+    "timestamp":  "2026-09-17T15:47:46",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  626,
+    "medianMs":  658,
+    "p95Ms":  711,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  626,
+                        "medianMs":  658,
+                        "p95Ms":  711
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  239,
+                        "medianMs":  233,
+                        "p95Ms":  371
+                    }
+                ],
+    "pass":  true
+}

@@ -1,0 +1,128 @@
+﻿[
+    {
+        "Img":  "bookmark_buyable_row.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  484,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@500"
+    },
+    {
+        "Img":  "bookmark_buydialog.jpg",
+        "Scene":  "BUY_DLG",
+        "Ms":  234,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@624"
+    },
+    {
+        "Img":  "bookmark_row5.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  557,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@1127"
+    },
+    {
+        "Img":  "bookmark_soldout.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  577,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@494"
+    },
+    {
+        "Img":  "iqoo_bookmark_buyable.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  563,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@856"
+    },
+    {
+        "Img":  "iqoo_bookmark_buydialog.jpg",
+        "Scene":  "BUY_DLG",
+        "Ms":  217,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@531"
+    },
+    {
+        "Img":  "iqoo_bookmark_soldout.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  589,
+        "Gt":  1,
+        "Det":  1,
+        "False":  1,
+        "Targets":  "bookmark@170, bookmark@856"
+    },
+    {
+        "Img":  "iqoo_bookmark_soldout2.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  579,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "bookmark@856"
+    },
+    {
+        "Img":  "iqoo_medal_anim_soldout.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  579,
+        "Gt":  1,
+        "Det":  1,
+        "False":  1,
+        "Targets":  "medal@168, medal@643"
+    },
+    {
+        "Img":  "medal_buyable_row.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  508,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "medal@505"
+    },
+    {
+        "Img":  "medal_buydialog.jpg",
+        "Scene":  "BUY_DLG",
+        "Ms":  225,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "medal@627"
+    },
+    {
+        "Img":  "medal_partial_top.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  561,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "medal@148"
+    },
+    {
+        "Img":  "medal_soldout.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  544,
+        "Gt":  1,
+        "Det":  1,
+        "False":  0,
+        "Targets":  "medal@503"
+    },
+    {
+        "Img":  "medal_soldout_anim.jpg",
+        "Scene":  "SHOP_LIST",
+        "Ms":  524,
+        "Gt":  1,
+        "Det":  1,
+        "False":  1,
+        "Targets":  "medal@201, medal@505"
+    }
+]

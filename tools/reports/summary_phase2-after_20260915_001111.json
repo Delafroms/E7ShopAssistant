@@ -1,0 +1,14 @@
+﻿{
+    "tag":  "phase2-after",
+    "timestamp":  "2026-09-15T00:11:11",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  565,
+    "p95Ms":  689,
+    "pass":  true
+}

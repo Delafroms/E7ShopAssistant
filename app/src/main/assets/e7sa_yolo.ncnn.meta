@@ -1,0 +1,5 @@
+# E7SA YOLO 模型自描述（由 tools/install_model.ps1 生成）
+# imgsz 必须等于导出该模型时的 imgsz；classes 顺序 = YOLO class id
+# 来源: multi\runs\e7sa_v2
+imgsz=1280
+classes=bookmark,medal,row_buy_button,row_soldout_button,refresh_button,confirm_button,cancel_button

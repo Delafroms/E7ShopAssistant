@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "e1-7class",
+    "timestamp":  "2026-09-16T01:16:56",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  684,
+    "medianMs":  712,
+    "p95Ms":  857,
+    "engines":  [
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  436,
+                        "medianMs":  500,
+                        "p95Ms":  533
+                    },
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  684,
+                        "medianMs":  712,
+                        "p95Ms":  857
+                    }
+                ],
+    "pass":  true
+}

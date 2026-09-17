@@ -1,0 +1,31 @@
+﻿{
+    "image":  "dev/positive/iqoo_bookmark_buyable.jpg",
+    "metadata":  {
+                     "notes":  "iQoo普通可买书签第5行",
+                     "device":  "iqoo-2400x1080"
+                 },
+    "negative_only":  false,
+    "scene":  "shop",
+    "resolution":  [
+                       2400,
+                       1080
+                   ],
+    "state":  "normal",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  850,
+                        "price":  184000,
+                        "cx":  1140,
+                        "bbox":  {
+                                     "y":  785,
+                                     "width":  130,
+                                     "height":  130,
+                                     "x":  1075
+                                 },
+                        "kind":  "bookmark"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "proposed"
+}

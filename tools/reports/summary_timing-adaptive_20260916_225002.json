@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "timing-adaptive",
+    "timestamp":  "2026-09-16T22:50:02",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  447,
+    "medianMs":  489,
+    "p95Ms":  519,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  447,
+                        "medianMs":  489,
+                        "p95Ms":  519
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  306,
+                        "medianMs":  344,
+                        "p95Ms":  400
+                    }
+                ],
+    "pass":  true
+}

@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "v2-model-m3theme",
+    "timestamp":  "2026-09-16T17:42:29",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  643,
+    "medianMs":  710,
+    "p95Ms":  747,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  643,
+                        "medianMs":  710,
+                        "p95Ms":  747
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  434,
+                        "medianMs":  498,
+                        "p95Ms":  534
+                    }
+                ],
+    "pass":  true
+}

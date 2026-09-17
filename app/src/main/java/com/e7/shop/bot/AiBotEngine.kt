@@ -1,0 +1,658 @@
+package com.e7.shop.bot
+
+import android.graphics.Bitmap
+import com.e7.shop.R
+import com.e7.shop.ShopAccessibilityService.Stage
+import com.e7.shop.data.RecordStore
+
+/**
+ * AI 点击引擎（V1 独立闭环，与传统 BotEngine 完全解耦、绝不互相接管）：
+ *
+ *   眼睛 = YoloEngine（YOLO 图标检测 + OCR 语义，每帧实时识别）
+ *   决策 = 本类（观察 → 判断 → 点击 → 再观察）
+ *   执行 = Host（Accessibility 手势）
+ *
+ * 硬性约束：
+ *  - 不调用任何传统点击函数（rowBuyPoint / dialogBuy / refreshButton /
+ *    refreshConfirm / dialogCancel），也不使用固定/录制坐标；
+ *  - 每次点击前先判断目标与按钮状态（金色=可点击 / 灰色=售空）；
+ *  - 无法确定下一步时明确报告（err_ai_undecided）并结束当前目标，
+ *    绝不回退到传统点击逻辑。
+ */
+class AiBotEngine(
+    private val host: BotEngine.Host,
+    private val generation: Int
+) {
+
+    private val vision = YoloEngine()
+    private val planner = ClickPlanner()
+
+    private enum class Phase {
+        OBSERVE, DECIDE_TARGETS, VERIFY_DIALOG, CONFIRM_PURCHASE, VERIFY_CLOSED,
+        REVEAL_SLOT, CLICK_REFRESH, CONFIRM_REFRESH, RECOVER, WAIT, DONE
+    }
+
+    private var phase = Phase.OBSERVE
+    private var target: Candidate? = null
+    private var lastDlg: Pair<Bitmap, DetectionResult>? = null
+    /** 刷新前画面指纹（P4）：用于验证"内容真的变了"。 */
+    private var refreshBeforeFp: String? = null
+    private var waitStreak = 0
+    private var recoverStreak = 0
+    private var undecidedStreak = 0
+    private var opCount = 0
+    /** 感知诊断计数（每 3 轮打一次识别细节，用于定位"识别不到候选"类问题）。 */
+    private var dbgCount = 0
+    private var session: RecordStore.Session? = null
+
+    /** A3 店铺状态跟踪器（观测层）：只记录状态变迁供诊断，不参与任何决策。 */
+    private val stateTracker = ShopStateTracker()
+
+    fun run(startGold: Long, startSkystones: Int) {
+        if (!YoloDet.loaded) {
+            // AI 点击的"眼睛"不可用：明确报告，绝不降级为传统点击
+            host.setError(host.str(R.string.err_ai_yolo_missing))
+            host.finish()
+            return
+        }
+        session = RecordStore.Session(
+            startTime = System.currentTimeMillis(),
+            startGold = startGold,
+            startSkystones = startSkystones
+        )
+        stateTracker.reset()
+        try {
+            while (!host.stopRequested()) {
+                val runMin = (System.currentTimeMillis() - session!!.startTime) / 60000.0
+                host.setFatigue(
+                    (runMin / Tuning.FATIGUE_RAMP_MINUTES * Tuning.FATIGUE_MAX)
+                        .toFloat().coerceAtMost(Tuning.FATIGUE_MAX)
+                )
+                if (host.isPaused()) {
+                    host.setStage(Stage.PAUSED)
+                    host.sleepMs(500)
+                    continue
+                }
+                host.log("E7SA.AI", "phase=${phase.name}")
+                phase = when (phase) {
+                    Phase.OBSERVE -> observe()
+                    Phase.DECIDE_TARGETS -> decideTargets()
+                    Phase.VERIFY_DIALOG -> verifyDialog()
+                    Phase.CONFIRM_PURCHASE -> confirmPurchase()
+                    Phase.VERIFY_CLOSED -> verifyClosed()
+                    Phase.REVEAL_SLOT -> revealSlot()
+                    Phase.CLICK_REFRESH -> clickRefresh()
+                    Phase.CONFIRM_REFRESH -> confirmRefresh()
+                    Phase.RECOVER -> recover()
+                    Phase.WAIT -> waitGame()
+                    Phase.DONE -> return
+                }
+            }
+        } catch (e: Exception) {
+            host.setError(host.str(R.string.err_exception, e.message ?: ""))
+        } finally {
+            session!!.endTime = System.currentTimeMillis()
+            host.commitSession(session!!)
+            host.finish()
+        }
+    }
+
+    /* ---------------- 工具 ---------------- */
+
+    private fun shot(): Pair<Bitmap, DetectionResult>? {
+        val b = host.screenshot() ?: return null
+        val r = vision.analyze(b)
+        return b to r
+    }
+
+    private fun recycle(b: Bitmap?) {
+        try {
+            b?.recycle()
+        } catch (e: Exception) {
+            // 回收失败只影响内存占用，不影响本帧的识别与决策结果
+            android.util.Log.w("E7SA.Mem", "bitmap recycle failed: " + e.message)
+        }
+    }
+
+    private fun s(): RecordStore.Session = session!!
+
+    private fun capsReached(): Boolean {
+        val c = host.cfg
+        val hit = (c.bookmarkCap > 0 && s().bookmarksGot >= c.bookmarkCap) ||
+            (c.medalCap > 0 && s().medalsGot >= c.medalCap)
+        if (hit) host.markCompleted()   // 持有量达标也是"正常完成任务"
+        return hit
+    }
+
+    private fun kindEnabled(kind: String): Boolean =
+        if (kind == "bookmark") host.cfg.buyBookmark else host.cfg.buyMedal
+
+    private fun countPurchase(kind: String) {
+        if (kind == "bookmark") {
+            s().bookmarksGot += 5
+            s().goldSpent += 184000L
+        } else {
+            s().medalsGot += 50
+            s().goldSpent += 280000L
+        }
+        host.counters(s())
+    }
+
+    private fun budgetBlocked(): Boolean {
+        val c = host.cfg
+        // D4 审计：这里原有「金币下限」闸门（minGold + startGold），但 startGold 恒为 0
+        // （所有入口 startBot(0,0)），闸门永久短路 —— 已删除，避免留下"看起来有保护、
+        // 实际永不触发"的假闸门。金币保护由下面真正生效的 goldSpendCap 提供。
+        if (c.goldSpendCap > 0 && s().goldSpent >= c.goldSpendCap) {
+            host.setError(host.errGoldCap(s().goldSpent))
+            host.markCompleted()   // 正常完成任务 → 允许按设置自动熄屏
+            return true
+        }
+        if (c.maxSkystones > 0 && s().skystonesSpent >= c.maxSkystones) {
+            host.setError(host.errSkyBudget())
+            host.markCompleted()
+            return true
+        }
+        return false
+    }
+
+    /** AI 无法确定下一步：明确报告，不猜测、不回退传统点击；连续多次则停止。 */
+    private fun undecided(reason: String): Phase {
+        undecidedStreak++
+        host.setError(host.str(R.string.err_ai_undecided, reason))
+        if (undecidedStreak >= 8) return Phase.DONE
+        host.sleepMs(1200)
+        return Phase.OBSERVE
+    }
+
+    /* ---------------- 阶段：观察与决策 ---------------- */
+
+    /** 观察：YOLO+OCR 识别当前画面并路由。 */
+    private fun observe(): Phase {
+        if (capsReached()) return Phase.DONE
+        val p = shot() ?: return Phase.WAIT
+        host.setStage(Stage.CHECKING)
+        val scene = p.second.scene
+        recycle(p.first)
+        host.log("E7SA.AI", "scene=$scene")
+        return when (scene) {
+            Scene.SHOP_LIST -> {
+                waitStreak = 0
+                recoverStreak = 0
+                Phase.DECIDE_TARGETS
+            }
+            Scene.BUY_DLG -> {
+                host.setError(host.str(R.string.err_recover_buy_dlg))
+                Phase.RECOVER
+            }
+            Scene.REFRESH_DLG -> {
+                host.setError(host.str(R.string.err_recover_refresh_dlg))
+                Phase.RECOVER
+            }
+            Scene.OTHER -> Phase.WAIT
+        }
+    }
+
+    /**
+     * 决策：逐个评估当前画面目标 ——
+     *  金色按钮（可点击）→ 点击购买；
+     *  灰色按钮 / 无按钮（售空/不可判断）→ 结束当前目标，找下一个；
+     *  全部处理完 → 揭示第 6 格 → 刷新。
+     */
+    private fun decideTargets(): Phase {
+        if (capsReached()) return Phase.DONE
+        // **金币/天空石预算闸门必须在这里也检查**。
+        // 此前 budgetBlocked() 只在 revealSlot / clickRefresh（下滑与刷新）两处调用，
+        // 购买决策路径完全没有预算检查 —— 后果是：金币花光后仍会继续尝试购买，
+        // 买不起就失败，然后继续刷新，**每刷新一次白烧 3 颗天空石**。
+        // 这是玩家明确担心的损失，必须在"决定买不买"这一步就拦住。
+        if (budgetBlocked()) return Phase.DONE
+        val p = shot() ?: return Phase.WAIT
+        val snap = p.second
+        if (snap.scene != Scene.SHOP_LIST) {
+            recycle(p.first)
+            return Phase.OBSERVE
+        }
+        host.setStage(Stage.CHECKING)
+        // A3：记录本轮商店状态（相对上一轮的差异）。纯观测，不改变下面任何决策。
+        host.log("E7SA.StateDiff", stateTracker.observe(snap))
+        // 感知诊断：AI 管线此前完全没有输出识别细节，实机出现"0 候选"时无从定位。
+        // 每 3 轮打一次，够定位问题又不刷屏。
+        dbgCount++
+        if (dbgCount % 3 == 0) host.log("E7SA.Percep", "engine=${snap.engine} scene=${snap.scene} ${snap.diag}")
+        val bmp = p.first
+        val targets = snap.candidates
+            .filter { kindEnabled(it.kind) && !host.handledContains(it.rowY) }
+        if (targets.isEmpty()) {
+            recycle(bmp)
+            return Phase.REVEAL_SLOT
+        }
+        val skipRows = ArrayList<Pair<Candidate, ClickPlanner.Button>>()
+        for (t in targets) {
+            val loc = planner.rowButtonState(bmp, snap, t.cy, t.tol)
+            when (loc.state) {
+                ClickPlanner.Button.CLICKABLE -> {
+                    target = t
+                    recycle(bmp)
+                    host.hesitate()
+                    host.log("E7SA.AI", "buy ${t.kind} button=CLICKABLE tap=(${loc.pt!!.first.toInt()},${loc.pt!!.second.toInt()})")
+                    host.guardedTap(loc.pt!!.first, loc.pt!!.second, "aiRowBuy")
+                    return Phase.VERIFY_DIALOG
+                }
+                // 先记账，等本轮所有行看完后用**同一张新帧**统一复核（见 confirmSkips）
+                ClickPlanner.Button.GRAY, ClickPlanner.Button.NONE -> skipRows.add(t to loc.state)
+            }
+        }
+        recycle(bmp)
+        if (skipRows.isNotEmpty()) confirmSkips(skipRows)
+        return Phase.REVEAL_SLOT
+    }
+
+    /**
+     * A4 观测优先：本轮被判为「灰 / 无按钮」的行，再用同一张新帧复核一次才允许跳过。
+     *
+     * 单帧可能正落在刷新/售罄动画的中间态（实测 sold-out 动画帧会多出候选、按钮色块
+     * 也尚未稳定）。旧版直接 handledAdd，一旦撞上这种帧，**整轮都会跳过这一行**——
+     * 那是不可恢复的漏买。这里只多花一帧（不是每行一帧）：复核后仍不可点的才标记跳过，
+     * 复核后变回可点的行保持未处理，交给下一轮 observe 重新决策（绝不拿旧帧的坐标去点）。
+     */
+    private fun confirmSkips(rows: List<Pair<Candidate, ClickPlanner.Button>>) {
+        host.sleepMs(host.randInt(220, 400).toLong())
+        val p = host.screenshot()
+        if (p == null) {
+            host.log("E7SA.AI", "A4 re-observe FAILED -> keep ${rows.size} row(s) for next cycle")
+            return
+        }
+        val r = vision.analyze(p)
+        if (r.scene != Scene.SHOP_LIST) {
+            recycle(p)
+            host.log("E7SA.AI", "A4 re-observe scene=${r.scene} -> keep ${rows.size} row(s) for next cycle")
+            return
+        }
+        for ((t, first) in rows) {
+            val st = planner.rowButtonState(p, r, t.cy, t.tol).state
+            if (st == ClickPlanner.Button.GRAY || st == ClickPlanner.Button.NONE) {
+                host.handledAdd(t.rowY)
+                host.log("E7SA.AI", "row ${t.kind} $first -> $st (x2) -> skip")
+            } else {
+                host.log("E7SA.AI", "row ${t.kind} $first -> $st -> keep for next cycle")
+            }
+        }
+        recycle(p)
+    }
+
+    /* ---------------- 阶段：购买闭环 ---------------- */
+
+    /** 点击后验证：购买弹窗是否出现。 */
+    private fun verifyDialog(): Phase {
+        var dlg: Pair<Bitmap, DetectionResult>? = null
+        // 弹窗等待 6 秒 → 12 秒：网络慢时弹窗可能 8~10 秒才出现，旧预算会让代码
+        // 误判"没弹窗"→ 该买未买 → 继续刷新白烧天空石（玩家怀疑的漏买路径）。
+        for (i in 0 until host.framesFor(12000)) {
+            host.sleepMs(host.randInt(350, 600).toLong())
+            val p = shot()
+            if (p != null && p.second.scene == Scene.BUY_DLG) { dlg = p; break }
+            if (p != null) recycle(p.first)
+        }
+        if (dlg == null) {
+            // 关键证据：弹窗超时。日志里频繁出现即说明"该买未买"，是漏买的直接线索。
+            host.log("E7SA.Buy", "DIALOG TIMEOUT kind=${target?.kind} rowY=${target?.rowY} (等待 12s 未见弹窗)")
+        }
+        if (dlg != null) {
+            // A4 观测优先：弹窗刚出现时可能还在渐显动画里（内容未完全呈现），
+            // 直接拿它做三重验证会失败 → 取消 → 重买（玩家实测到的"点了取消又重新买"）。
+            // 这里补一个短等待并重新取帧，确保验证用的是稳定帧。
+            host.sleepMs(host.randInt(220, 360).toLong())
+            val stable = shot()
+            if (stable != null && stable.second.scene == Scene.BUY_DLG) {
+                recycle(dlg.first)
+                lastDlg = stable
+            } else {
+                if (stable != null) recycle(stable.first)
+                lastDlg = dlg
+            }
+            return Phase.CONFIRM_PURCHASE
+        }
+        // 弹窗未出现：再看一眼当前行，判断是"售空/灰按钮"还是"无法确认"
+        host.sleepMs(600)
+        val p2 = host.screenshot()
+        if (p2 != null) {
+            val r2 = vision.analyze(p2)
+            val t = target
+            if (t != null && r2.scene == Scene.SHOP_LIST) {
+                if (rowSoldOut(r2, t.cy, t.tol)) {
+                    host.handledAdd(t.rowY)
+                    recycle(p2)
+                    host.log("E7SA.AI", "no dialog, row sold -> skip")
+                    return Phase.DECIDE_TARGETS
+                }
+                val loc = planner.rowButtonState(p2, r2, t.cy, t.tol)
+                if (loc.state == ClickPlanner.Button.GRAY) {
+                    host.handledAdd(t.rowY)
+                    recycle(p2)
+                    host.log("E7SA.AI", "no dialog, button gray -> skip")
+                    return Phase.DECIDE_TARGETS
+                }
+                if (loc.state == ClickPlanner.Button.CLICKABLE) {
+                    // 按钮仍可点击但弹窗未出现：明确报告并结束当前目标，不循环点击
+                    host.handledAdd(t.rowY)
+                    recycle(p2)
+                    host.log("E7SA.AI", "no dialog, button still clickable -> report + skip")
+                    return undecided("点击后未出现购买弹窗")
+                }
+            }
+            recycle(p2)
+        }
+        return undecided("点击后无法确认画面状态")
+    }
+
+    /** 弹窗确认：三重验证（共享安全语义）+ AI 定位金色确认按钮 + 点击。 */
+    private fun confirmPurchase(): Phase {
+        val dlg = lastDlg ?: return undecided("购买弹窗状态丢失")
+        lastDlg = null
+        val t = target
+        if (t == null) {
+            recycle(dlg.first)
+            return Phase.OBSERVE
+        }
+        if (!dialogConfirmed(dlg.second, dlg.first, t.kind)) {
+            // 与 BotEngine 同样的区分逻辑：只有"弹窗里的商品名明确是别的东西"才算点错行。
+            // 若一律放弃，会把"价格/图标 OCR 暂时抖动"误判成点错行而漏买。
+            val dlgKind = dialogItemKind(dlg.second.lines)
+            if (dlgKind != null && dlgKind != t.kind) {
+                host.handledAdd(t.rowY)
+                host.setError(host.str(R.string.err_row_wrong_target, t.kind, t.rowY))
+                host.log("E7SA.AI", "WRONG TARGET kind=${t.kind} rowY=${t.rowY} dialogKind=$dlgKind -> 放弃该行并取消")
+            } else {
+                host.log("E7SA.AI", "dialog verify FAIL kind=${t.kind} rowY=${t.rowY} dialogKind=${dlgKind ?: "?"} -> 取消后重试")
+            }
+            recycle(dlg.first)
+            return Phase.RECOVER
+        }
+        // E1：模型有 confirm_button 框就优先用（2 类模型下为 null，自动回退色块法）
+        val pt = planner.modelButton(dlg.second, "confirm_button")
+            ?: planner.goldButtonForText(dlg.second.lines, dlg.first, BUY_KW)
+        if (pt == null) {
+            val fr = planner.textButtonFillRatio(dlg.second.lines, dlg.first, BUY_KW)
+            recycle(dlg.first)
+            return undecided("弹窗确认按钮无法视觉确认（彩色占比 ${"%.2f".format(fr)}）")
+        }
+        recycle(dlg.first)
+        host.hesitate()
+        host.log("E7SA.AI", "confirm tap=(${pt.first.toInt()},${pt.second.toInt()})")
+        host.guardedTap(pt.first, pt.second, "aiConfirm")
+        return Phase.VERIFY_CLOSED
+    }
+
+    /** 购买完成验证：弹窗关闭（连续两次非 BUY_DLG）→ 计数。 */
+    private fun verifyClosed(): Phase {
+        var closed = 0
+        for (i in 0 until host.framesFor(10000)) {
+            host.sleepMs(host.randInt(400, 700).toLong())
+            val p = shot() ?: continue
+            val scene = p.second.scene
+            recycle(p.first)
+            if (scene != Scene.BUY_DLG) {
+                closed++
+                if (closed >= 2) {
+                    target?.let { countPurchase(it.kind) }
+                    target?.let { host.handledAdd(it.rowY) }
+                    // 购买成功日志：与 DIALOG TIMEOUT / 各类失败日志对照，
+                    // 就能算出"尝试了多少次、成功了多少次"，直接暴露漏买率。
+                    host.log("E7SA.Buy", "OK kind=${target?.kind} rowY=${target?.rowY} " +
+                        "bookmarks=${s().bookmarksGot} medals=${s().medalsGot} " +
+                        "goldSpent=${s().goldSpent} skySpent=${s().skystonesSpent}")
+                    target = null
+                    undecidedStreak = 0
+                    opCount++
+                    host.rest(opCount)
+                    return Phase.DECIDE_TARGETS
+                }
+            } else {
+                closed = 0
+            }
+        }
+        return undecided("购买弹窗未关闭")
+    }
+
+    /* ---------------- 阶段：滑动与刷新 ---------------- */
+
+    /** 无目标/目标处理完：上滑揭示第 6 格，滑到列表不再滚动为止，随后刷新。 */
+    private fun revealSlot(): Phase {
+        if (budgetBlocked()) return Phase.DONE
+        val w = host.screenW
+        val h = host.screenH
+        val xC = w * host.cfg.swipeCenterX
+        var shotFails = 0
+        // 与 BotEngine.slot6Check 同一判据：连续 2 次"没动"才算到底。
+        // 旧逻辑 `if (moved) break` 让同一操作的下滑次数在 1~3 次之间随机（didScroll 阈值
+        // 卡在临界值），且可能在列表尚未到底时就进入刷新 —— 改为"滑到不动"后行为确定。
+        var stillStreak = 0
+        for (attempt in 0 until 4) {
+            val before = host.screenshot()
+            if (before == null) { shotFails++; host.sleepMs(800); continue }
+            host.swipe(
+                xC, h * Tuning.SWIPE_LOW_Y, xC, h * Tuning.SWIPE_HIGH_Y,
+                if (attempt == 0) Tuning.SWIPE_FIRST_MS else Tuning.SWIPE_REPEAT_MS
+            )
+            // 等画面稳定后再识别（滑动惯性/加载中不急着判断）
+            val after = captureStableFrame(6)
+            if (after == null) { shotFails++; recycle(before); continue }
+            val moved = didScroll(before, after.first)
+            recycle(before)
+            val snap = after.second
+            recycle(after.first)
+            val targets = snap.candidates
+                .filter { kindEnabled(it.kind) && !host.handledContains(it.rowY) }
+            if (targets.isNotEmpty()) return Phase.DECIDE_TARGETS
+            if (moved) { stillStreak = 0; continue }
+            stillStreak++
+            if (stillStreak >= 2) break
+        }
+        return if (shotFails >= 3) Phase.WAIT else Phase.CLICK_REFRESH
+    }
+
+    /** 刷新：AI 定位「立即更新」金色按钮并点击，等待刷新弹窗。 */
+    private fun clickRefresh(): Phase {
+        if (budgetBlocked()) return Phase.DONE
+        host.setStage(Stage.REFRESHING)
+        val p = shot() ?: return Phase.WAIT
+        val snap = p.second
+        if (snap.scene != Scene.SHOP_LIST) {
+            recycle(p.first)
+            return Phase.OBSERVE
+        }
+        val pt = planner.modelButton(snap, "refresh_button")
+            ?: planner.goldButtonForText(snap.lines, p.first, REFRESH_BTN_KW)
+        if (pt == null) {
+            val fr = planner.textButtonFillRatio(snap.lines, p.first, REFRESH_BTN_KW)
+            recycle(p.first)
+            return undecided("「立即更新」按钮无法视觉确认（彩色占比 ${"%.2f".format(fr)}）")
+        }
+        // 刷新前指纹（P4）：确认刷新后内容真的变了
+        refreshBeforeFp = frameFingerprint(snap)
+        recycle(p.first)
+        host.hesitate()
+        host.log("E7SA.AI", "refresh tap=(${pt.first.toInt()},${pt.second.toInt()})")
+        host.guardedTap(pt.first, pt.second, "aiRefresh")
+        var dlg: Pair<Bitmap, DetectionResult>? = null
+        // 刷新弹窗同样 6 秒 → 12 秒：网络慢时弹窗会晚到
+        for (i in 0 until host.framesFor(12000)) {
+            host.sleepMs(450)
+            val p2 = shot()
+            if (p2 != null && p2.second.scene == Scene.REFRESH_DLG) { dlg = p2; break }
+            if (p2 != null) recycle(p2.first)
+        }
+        if (dlg == null) {
+            host.log("E7SA.Buy", "REFRESH DIALOG TIMEOUT (等待 12s 未见刷新弹窗)")
+            return undecided("刷新弹窗未出现")
+        }
+        lastDlg = dlg
+        return Phase.CONFIRM_REFRESH
+    }
+
+    /** 刷新弹窗：AI 定位「确认」金色按钮并点击；无法定位 → 取消弹窗恢复。 */
+    private fun confirmRefresh(): Phase {
+        val dlg = lastDlg ?: return undecided("刷新弹窗状态丢失")
+        lastDlg = null
+        val pt = planner.modelButton(dlg.second, "confirm_button")
+            ?: planner.goldButtonForText(dlg.second.lines, dlg.first, CONFIRM_KW)
+        if (pt == null) {
+            val fr = planner.textButtonFillRatio(dlg.second.lines, dlg.first, CONFIRM_KW)
+            recycle(dlg.first)
+            host.setError(host.str(R.string.err_no_confirm))
+            host.log("E7SA.AI", "refresh confirm visual fail fill=$fr -> recover")
+            return Phase.RECOVER
+        }
+        recycle(dlg.first)
+        host.hesitate()
+        host.log("E7SA.AI", "refreshConfirm tap=(${pt.first.toInt()},${pt.second.toInt()})")
+        host.guardedTap(pt.first, pt.second, "aiRefreshConfirm")
+        host.daze()
+        opCount++
+        host.rest(opCount)
+        // VERIFY → COMMIT（P2 + P4）：先确认新库存真的出现（指纹变化 + 稳定），
+        // 验证通过才清空已处理行并计数；未验证则不计数（fail-closed）。
+        val next = waitShopLoaded(refreshBeforeFp ?: "", "刷新后商店列表未就绪")
+        if (next == Phase.DECIDE_TARGETS) {
+            host.handledClear()
+            s().refreshes++
+            s().skystonesSpent += 3
+            host.counters(s())
+            undecidedStreak = 0
+        }
+        return next
+    }
+
+    /* ---------------- 状态驱动等待（动作 → 等待画面变化 → 重新识别 → 稳定后继续） ---------------- */
+
+    /**
+     * 等待商店列表真正加载完成（P4：先证明"变了"，再证明"稳定了"）：
+     * 每轮重新识别，要求
+     *  ① 指纹 != 刷新前指纹（内容确实变了 —— 否则旧列表静止会被误判为刷新完成）
+     *  ② 商店场景 + **行数已停止增长**（见下）
+     *  ③ 连续 2 帧画面无显著变化（已稳定）
+     *
+     * 关于 ② 的修正（实机复现的问题）：
+     * 旧判据是 `rows >= 3`，门槛太低 —— 网络慢时列表逐行渐显，第 1~3 行刚出来就满足
+     * "rows>=3"，于是**在列表只加载了三分之一时就下滑**，漏掉后面的物品栏。
+     * 实测正常加载完是 rows=8~10（8~10 个"购买/售罄"文本，含"可购买1次"这类状态文字）。
+     * 现改为：行数达到最小门槛 **且连续 3 帧不再增长**才算加载完
+     * （不写死行数，兼容不同商店等级；3 帧是为了过滤网络抖动造成的假稳定）。
+     */
+    private fun waitShopLoaded(beforeFp: String, timeoutReason: String): Phase {
+        var prev: Bitmap? = null
+        var stable = 0
+        var lastRows = -1
+        var rowsStable = 0
+        // 时序自适应：按时间预算换算帧数（慢设备自动多给帧、快设备自动收紧）
+        for (i in 0 until host.framesFor(18000)) {
+            host.sleepMs(host.randInt(200, 350).toLong())
+            val p = host.screenshot() ?: continue
+            val r = vision.analyze(p)
+            val fp = frameFingerprint(r)
+            val rows = r.lines.count { hasAny(it.text, BUY_KW) || hasAny(it.text, SOLD_KW) }
+            // 行数是否已停止增长。要求连续 **3 帧** 相同（rowsStable>=2）而不是 2 帧：
+            // 网络抖动会让加载中途出现"两帧恰好相同"的假稳定，只等 2 帧就可能被骗过、
+            // 在列表尚未加载完时下滑 → 漏掉第一物品栏（玩家实测到的现象）。
+            // 多等一帧约 0.9 秒，换的是不漏格。
+            if (rows == lastRows) rowsStable++ else rowsStable = 0
+            lastRows = rows
+            // 最小门槛 5 行：正常一屏 8~10 行；低于 5 行几乎可以确定还在加载中
+            val loaded = r.scene == Scene.SHOP_LIST &&
+                rows >= 5 && rowsStable >= 2
+            val changed = beforeFp.isEmpty() || fp != beforeFp
+            var nowStable = false
+            if (prev != null) {
+                if (didScroll(prev, p)) stable = 0 else stable++
+                nowStable = stable >= 1
+            }
+            recycle(prev)
+            prev = p
+            if (loaded && changed && nowStable) {
+                recycle(prev)
+                host.log("E7SA.AI", "shop reloaded rows=$rows changed=$changed stable -> decide")
+                return Phase.DECIDE_TARGETS
+            }
+        }
+        recycle(prev)
+        return undecided(timeoutReason)
+    }
+
+    /**
+     * 连续截图直到画面稳定（连续 2 帧无显著变化），返回稳定帧；超时返回最后一帧。
+     *
+     * 两级探测（省时关键）：稳定判定只需要"画面变没变"，用轻量图标探测即可，
+     * **不必每帧都跑完整识别**。旧版每帧都 analyze()（OCR 390ms + YOLO 45ms），
+     * 3 帧就是 1.3 秒；现在前几帧只跑 YOLO（约 45ms），**只在最后对稳定帧做一次
+     * 完整识别**。省下的正是滑动路径上最大的一块开销。
+     */
+    private fun captureStableFrame(attempts: Int): Pair<Bitmap, DetectionResult>? {
+        var prev: Bitmap? = null
+        var stable = 0
+        var lastBmp: Bitmap? = null
+        for (i in 0 until attempts) {
+            host.sleepMs(host.randInt(350, 550).toLong())
+            val p = host.screenshot() ?: continue
+            // 轻量探测：只为"画面是否还在动"服务，不需要 OCR
+            engine_hasIconFast(p)
+            if (prev != null) {
+                if (didScroll(prev, p)) stable = 0 else stable++
+            }
+            recycle(prev)
+            prev = p
+            lastBmp?.let { recycle(it) }
+            lastBmp = p
+            if (stable >= 2) break
+        }
+        val bmp = lastBmp ?: return null
+        prev?.let { if (it !== bmp) recycle(it) }
+        // 只对最终稳定帧做一次完整识别
+        val r = vision.analyze(bmp)
+        return bmp to r
+    }
+
+    /** 轻量探测包装（只为稳定判定服务，结果不参与决策）。 */
+    private fun engine_hasIconFast(bmp: Bitmap) {
+        try { vision.hasIconFast(bmp) } catch (e: Throwable) { }
+    }
+
+    /* ---------------- 阶段：恢复与等待 ---------------- */
+
+    /** 残留弹窗恢复：AI 定位「取消」并关闭；绝不猜测购买/确认。 */
+    private fun recover(): Phase {
+        recoverStreak++
+        if (recoverStreak > 6) {
+            host.setError(host.str(R.string.err_dialog_stuck))
+            return Phase.DONE
+        }
+        host.setStage(Stage.CHECKING)
+        val p = shot() ?: return Phase.OBSERVE
+        val scene = p.second.scene
+        if (scene != Scene.BUY_DLG && scene != Scene.REFRESH_DLG) {
+            recycle(p.first)
+            return Phase.OBSERVE
+        }
+        val pt = planner.modelButton(p.second, "cancel_button")
+            ?: planner.cancelButton(p.second.lines, p.first)
+        if (pt != null) {
+            host.log("E7SA.AI", "cancel tap=(${pt.first.toInt()},${pt.second.toInt()})")
+            host.guardedTap(pt.first, pt.second, "aiCancel")
+        }
+        recycle(p.first)
+        host.sleepMs(700)
+        return Phase.OBSERVE
+    }
+
+    /** WAIT：非商店画面（加载/切走），带超时哨兵。 */
+    private fun waitGame(): Phase {
+        waitStreak++
+        if (waitStreak > 600) {
+            host.setError(host.str(R.string.err_wait_timeout))
+            return Phase.DONE
+        }
+        host.setStage(Stage.WAITING)
+        host.sleepMs(600)
+        return Phase.OBSERVE
+    }
+}

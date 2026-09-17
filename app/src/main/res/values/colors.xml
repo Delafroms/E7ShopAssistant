@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ============================================================
+         Material-Theme (Steam Millenium style) - Material 3 Design
+         Inspired by github.com/kuska1/Material-Theme:
+           Dark surface = Steam deep blue-grey
+           Primary = Material 3 blue source (#ADC6FF light / #284777 container)
+           OLED-ready: pure-black surface variant available
+         ============================================================ -->
+
+    <!-- Surface / background (Steam dark blue-grey, Material 3 neutral) -->
+    <color name="bg_dark">#171A21</color>       <!-- main background -->
+    <color name="bg_deep">#0E1013</color>       <!-- deeper panels / nav -->
+    <color name="bg_card">#1E232B</color>       <!-- card surface -->
+    <color name="bg_card_light">#262D38</color> <!-- elevated card -->
+    <color name="bg_input">#14181F</color>      <!-- input fields -->
+    <color name="bg_oled">#000000</color>       <!-- OLED pure black -->
+
+    <!-- Primary (Material 3 blue source) -->
+    <color name="primary">#ADC6FF</color>        <!-- M3 primary -->
+    <color name="primary_dark">#284777</color>   <!-- primaryContainer -->
+    <color name="primary_light">#D8E2FF</color>  <!-- onPrimaryContainer -->
+    <color name="onPrimary">#002E69</color>      <!-- on primary -->
+
+    <!-- Secondary / accent -->
+    <color name="accent">#BFC6DC</color>         <!-- M3 secondary -->
+    <color name="gold">#8F6E2B</color>           <!-- kept name; toned to M3 -->
+    <color name="gold_dark">#6B4F1A</color>
+    <color name="cyan">#9DCBFF</color>
+
+    <!-- Text (Material 3 onSurface scale) -->
+    <color name="text_primary">#E2E2E9</color>   <!-- onSurface -->
+    <color name="text_secondary">#C4C6D0</color> <!-- onSurfaceVariant -->
+    <color name="text_dim">#8E9099</color>       <!-- outline -->
+
+    <!-- Status -->
+    <color name="success">#A6D189</color>   <!-- M3 tone -->
+    <color name="warning">#E5C890</color>
+    <color name="danger">#F2B8B5</color>    <!-- M3 error -->
+    <color name="info">#99C9E8</color>
+
+    <!-- Dividers / borders -->
+    <color name="divider">#2A313B</color>
+    <color name="border">#44474F</color>    <!-- M3 surfaceVariant -->
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

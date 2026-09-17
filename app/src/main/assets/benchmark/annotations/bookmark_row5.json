@@ -1,0 +1,27 @@
+﻿{
+    "image":  "dev/positive/bookmark_row5.jpg",
+    "negative_only":  false,
+    "scene":  "shop",
+    "resolution":  [
+                       2800,
+                       1272
+                   ],
+    "state":  "normal",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  1130,
+                        "price":  184000,
+                        "cx":  1322,
+                        "bbox":  {
+                                     "y":  1050,
+                                     "width":  165,
+                                     "height":  160,
+                                     "x":  1240
+                                 },
+                        "kind":  "bookmark"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "verified"
+}

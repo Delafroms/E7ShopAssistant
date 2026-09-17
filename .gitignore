@@ -1,0 +1,47 @@
+# ===== 构建产物 =====
+build/
+.gradle/
+.kotlin/
+*.apk
+*.apk.idsig
+*.aab
+*.jks
+*.keystore
+
+# 本地环境配置（含 SDK 绝对路径，不应入库）
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+
+# ===== 第三方预编译依赖（约 146MB，按 README「构建-依赖」一节自行下载）=====
+# ncnn（simpleomp 自编译版）与 opencv-mobile 的静态库与头文件。
+# 排除原因：体积大且可从上游获取；保留会导致仓库臃肿、clone 缓慢。
+app/src/main/jni/ncnn-arm64-v8a/
+app/src/main/jni/ncnn-armeabi-v7a/
+app/src/main/jni/opencv-mobile-*/
+app/src/main/.cxx/
+app/.cxx/
+
+# ===== 临时与调试产物 =====
+# 根目录的调试截图（源码目录内的资源图不受影响）
+/*.png
+/*.jpg
+diag_frames/
+*.log
+
+# ===== 手动备份目录（已被 git 取代）=====
+_backup*/
+_removed_deadcode*/
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== 系统 =====
+Thumbs.db
+Desktop.ini
+.DS_Store

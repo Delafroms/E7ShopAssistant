@@ -1,0 +1,14 @@
+﻿{
+    "tag":  "phase1-baseline",
+    "timestamp":  "2026-09-15T00:06:31",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  483,
+    "p95Ms":  582,
+    "pass":  true
+}

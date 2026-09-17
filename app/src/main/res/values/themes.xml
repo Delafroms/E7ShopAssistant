@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material-Theme (Steam Millenium) - Material 3 -->
+    <style name="Theme.E7Shop" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/onPrimary</item>
+        <item name="colorPrimaryContainer">@color/primary_dark</item>
+        <item name="colorOnPrimaryContainer">@color/primary_light</item>
+        <item name="colorSecondary">@color/accent</item>
+        <item name="colorOnSecondary">@color/bg_dark</item>
+        <item name="colorSurface">@color/bg_card</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSurfaceVariant">@color/border</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorOutline">@color/text_dim</item>
+        <item name="android:colorBackground">@color/bg_dark</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        <item name="colorError">@color/danger</item>
+        <item name="android:statusBarColor">@color/bg_deep</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_deep</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- OLED appearance (Material-Theme OLED option): pure black surfaces
+         for AMOLED screens - deeper blacks, battery-friendly. -->
+    <style name="Theme.E7Shop.OLED" parent="Theme.E7Shop">
+        <item name="colorSurface">@color/bg_oled</item>
+        <item name="android:colorBackground">@color/bg_oled</item>
+        <item name="colorOnBackground">@color/text_primary</item>
+        <item name="android:windowBackground">@color/bg_oled</item>
+        <item name="android:statusBarColor">@color/bg_oled</item>
+        <item name="android:navigationBarColor">@color/bg_oled</item>
+    </style>
+</resources>

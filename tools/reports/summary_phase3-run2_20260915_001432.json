@@ -1,0 +1,14 @@
+﻿{
+    "tag":  "phase3-run2",
+    "timestamp":  "2026-09-15T00:14:32",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  650,
+    "p95Ms":  785,
+    "pass":  true
+}

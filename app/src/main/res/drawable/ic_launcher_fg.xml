@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- scan scope ring (Steam blue) -->
+    <path
+        android:pathData="M54,28 a26,26 0 1,1 -0.01,0 z"
+        android:strokeColor="#8C66C0F4"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- inner thin ring accent (bottom-right arc) -->
+    <path
+        android:pathData="M62,66 a22,22 0 0,0 14,-14"
+        android:strokeColor="#CC9FD8FF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- bookmark ribbon: champagne gold gradient -->
+    <path android:pathData="M43,37 L65,37 L65,63 L54,78 L43,63 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54" android:startY="37"
+                android:endX="54" android:endY="78"
+                android:startColor="#F6DE8A"
+                android:endColor="#C9A227" />
+        </aapt:attr>
+    </path>
+    <!-- bookmark top edge highlight -->
+    <path
+        android:pathData="M43,37 L65,37"
+        android:strokeColor="#66FFF3C4"
+        android:strokeWidth="1"
+        android:fillColor="#00000000" />
+    <!-- navy star on the ribbon -->
+    <path
+        android:fillColor="#12263C"
+        android:pathData="M54,47.6 L55.7,52.3 L60.5,54 L55.7,55.7 L54,60.4 L52.3,55.7 L47.5,54 L52.3,52.3 Z" />
+    <!-- cyan sparkle (top-right) -->
+    <path
+        android:fillColor="#B8DCFF"
+        android:pathData="M68,28.2 L69.7,32.2 L73.7,34 L69.7,35.8 L68,39.8 L66.3,35.8 L62.3,34 L66.3,32.2 Z" />
+    <!-- small white star (left) -->
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M39,33 L40.1,36.4 L43.5,37.5 L40.1,38.6 L39,42 L37.9,38.6 L34.5,37.5 L37.9,36.4 Z" />
+    <!-- faint dots -->
+    <path
+        android:fillColor="#59FFFFFF"
+        android:pathData="M72.5,64.5 a1.15,1.15 0 1,1 -0.01,0 z" />
+    <path
+        android:fillColor="#40FFFFFF"
+        android:pathData="M35,62 a0.9,0.9 0 1,1 -0.01,0 z" />
+</vector>

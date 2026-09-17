@@ -1,0 +1,30 @@
+﻿{
+    "image":  "dev/positive/medal_partial_top.jpg",
+    "metadata":  {
+                     "notes":  "奖牌图标顶部被裁切,部分可见"
+                 },
+    "negative_only":  false,
+    "scene":  "shop",
+    "resolution":  [
+                       2800,
+                       1272
+                   ],
+    "state":  "sold_out",
+    "split":  "dev",
+    "targets":  [
+                    {
+                        "cy":  147,
+                        "price":  280000,
+                        "cx":  1335,
+                        "bbox":  {
+                                     "y":  95,
+                                     "width":  150,
+                                     "height":  105,
+                                     "x":  1260
+                                 },
+                        "kind":  "medal"
+                    }
+                ],
+    "language":  "zh",
+    "annotation_quality":  "verified"
+}

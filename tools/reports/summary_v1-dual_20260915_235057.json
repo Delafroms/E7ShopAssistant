@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "v1-dual",
+    "timestamp":  "2026-09-15T23:50:57",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  482,
+    "medianMs":  550,
+    "p95Ms":  579,
+    "engines":  [
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  475,
+                        "medianMs":  557,
+                        "p95Ms":  613
+                    },
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  482,
+                        "medianMs":  550,
+                        "p95Ms":  579
+                    }
+                ],
+    "pass":  true
+}

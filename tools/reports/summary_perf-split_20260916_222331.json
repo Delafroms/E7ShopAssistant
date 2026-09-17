@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "perf-split",
+    "timestamp":  "2026-09-16T22:23:31",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  631,
+    "medianMs":  716,
+    "p95Ms":  736,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  631,
+                        "medianMs":  716,
+                        "p95Ms":  736
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  442,
+                        "medianMs":  508,
+                        "p95Ms":  544
+                    }
+                ],
+    "pass":  true
+}
