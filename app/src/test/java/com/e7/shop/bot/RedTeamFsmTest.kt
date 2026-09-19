@@ -71,7 +71,10 @@ class RedTeamFsmTest {
         override fun finish() { stop = true }
         override fun stopRequested() = stop
         override fun isPaused() = false
-        override fun handledAdd(y: Int) { handled.add(y) }
+        /** 历史记录：handled 会在刷新时被引擎按设计清空（"刷新后重新给机会"），
+         *  所以断言"是否曾标记过某行"必须看历史，不能看最终集合。 */
+        val handledHistory = mutableListOf<Int>()
+        override fun handledAdd(y: Int) { handled.add(y); handledHistory.add(y) }
         override fun handledContains(y: Int) = handled.contains(y)
         override fun handledClear() { handled.clear() }
         override fun errGoldCap(spent: Long) = "gold-cap"
@@ -80,6 +83,7 @@ class RedTeamFsmTest {
         override fun str(resId: Int, vararg args: Any): String = "str(" + resId + ")"
         override fun log(tag: String, msg: String) {
             logs.add(tag + " " + msg)
+            println("[RT] " + tag + " " + msg)
             if (msg.startsWith("ALLOW")) gateTags.add(msg.substringAfter("ALLOW ").substringBefore(" "))
         }
         override fun traceFrame(stage: String, r: DetectionResult) {}
@@ -93,16 +97,29 @@ class RedTeamFsmTest {
         override var sleepMode = false
         override fun hasIconFast(bmp: Bitmap) = true
 
-        private val rowBuyTapped get() = host.gateTags.contains("rowBuy")
-        private val finalTapped get() = host.gateTags.contains("finalPurchase")
+        /**
+         * 编排依据「弹窗**此刻**是否还开着」（2026-09-19 修正）。
+         *
+         * 旧版用粘滞标志（"历史上点过 rowBuy 就永远返回弹窗"）——那会造出一个
+         * 引擎永远走不出去的世界：它在 SCAN 阶段看到弹窗 → RECOVER → 又看到弹窗 ……
+         * 三条红队用例因此全部误报。现在按最近一次动作推断：
+         *  · 点过行内购买、且之后没被取消 → 弹窗开着；
+         *  · RECOVER 点过取消 → 弹窗关上（引擎得以回到商店列表继续）；
+         *  · 确认点过之后：正常场景关闭，"永不关闭"攻击场景保持打开。
+         */
+        private fun lastIndexOf(tag: String) = host.gateTags.indexOfLast { it == tag }
 
-        override fun analyze(bmp: Bitmap): DetectionResult = when {
-            // 攻击⑤：确认点下后弹窗**始终不消失**（点击被系统对话框吃掉）
-            finalTapped && attack == Attack.DIALOG_NEVER_CLOSES -> dialog()
-            finalTapped -> shopRow()
-            rowBuyTapped -> dialog()
-            else -> shopRow()
-        }
+        private val dialogOpen: Boolean
+            get() {
+                val buy = lastIndexOf("rowBuy")
+                if (buy < 0) return false
+                if (lastIndexOf("recoverCancel") > buy) return false
+                val fin = lastIndexOf("finalPurchase")
+                return if (fin > buy) attack == Attack.DIALOG_NEVER_CLOSES else true
+            }
+
+        override fun analyze(bmp: Bitmap): DetectionResult =
+            if (dialogOpen) dialog() else shopRow()
 
         /** 商店列表：第 rowY 行一件誓约书签（可买），可带攻击变形。 */
         private fun shopRow(): DetectionResult {
@@ -155,10 +172,6 @@ class RedTeamFsmTest {
      * 攻击①：**点错行** —— 行里是书签，弹窗里却是奖牌。
      * 期望：引擎立即放弃该行（标记已处理，避免"点错→取消→再点错"活锁），且**不确认购买**。
      */
-    @Ignore(
-        "红队用例待调通（2026-09-19）：编排未对齐（handled 断言依赖引擎走到 WRONG TARGET 分支，"
-            + "而当前 Attacker 让弹窗在 SCAN 阶段也一直存在 → 引擎先进 RECOVER 循环）。"
-    )
     @Test
     fun attack_mismatched_dialog_kind_is_abandoned() {
         val (host, session) = runAttack(Attack.MISMATCHED_DIALOG_KIND)
@@ -166,7 +179,7 @@ class RedTeamFsmTest {
         assertTrue(
             "必须标记该行已处理，否则会陷入「点错→取消→再点错」活锁；handled=" + host.handled +
                 " taps=" + host.taps + "\n最近日志：\n" + host.logs.takeLast(20).joinToString("\n"),
-            host.handled.contains(rowY.toInt())
+            host.handledHistory.contains(rowY.toInt())
         )
         assertEquals("不得记账（没买到）", 0, session!!.bookmarksGot)
     }
@@ -186,11 +199,6 @@ class RedTeamFsmTest {
      * 攻击③：**价格歧义** —— 弹窗里出现两个 6 位数字（184000 与 999999）。
      * 期望：三重验证里的"价格唯一匹配"拒绝，不确认购买。
      */
-    @Ignore(
-        "红队用例待调通（2026-09-19）：Attacker 编排在「点了行内购买后永久返回弹窗」上"
-            + "与引擎的 RECOVER/重试路径交互未对齐，断言会误报。**发现的真实问题已修**："
-            + "确定性失败（价格歧义/找不到按钮/找不到确认键）现在走 VERIFY_FAIL 封顶预算。"
-    )
     @Test
     fun attack_ambiguous_price_blocks_confirmation() {
         val (host, session) = runAttack(Attack.AMBIGUOUS_PRICE)
@@ -217,10 +225,6 @@ class RedTeamFsmTest {
      * 期望：**绝不写出假成功**（bookmarksGot 必须为 0），并留下明确记录。
      * 这条直接对应"假阳性比没有记录更危险"的举证原则。
      */
-    @Ignore(
-        "红队用例待调通（2026-09-19）：同上，编排未对齐；该用例要验证的语义"
-            + "（超时只写 UNCONFIRMED、绝不写 PURCHASE COMMIT）已由 FSM 钱路径用例间接覆盖。"
-    )
     @Test
     fun attack_dialog_never_closes_never_writes_fake_success() {
         val (host, session) = runAttack(Attack.DIALOG_NEVER_CLOSES)

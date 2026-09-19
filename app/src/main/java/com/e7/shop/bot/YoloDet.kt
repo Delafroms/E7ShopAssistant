@@ -37,10 +37,15 @@ object YoloDet {
     /** 由 meta 的 imgsz 决定推理输入尺寸（0 或负数则 native 侧退回 640）。 */
     @JvmStatic external fun nativeLoad(assetManager: AssetManager, targetSize: Int): Boolean
 
-    /** 模型加载状态（服务启动时设置；引擎选择据此决定是否回退传统引擎）。 */
+    /**
+     * 模型加载状态（服务启动时设置；引擎选择据此决定是否回退传统引擎）。
+     *
+     * `internal set` 而非 `private set`：只为让同模块的单测能模拟"模型已加载"
+     * （AI 管线的 FSM 测试需要它，否则 run() 会在第一行就退出）。生产代码没有其它写入点。
+     */
     @Volatile
     var loaded: Boolean = false
-        private set
+        internal set
 
     /** 推理输入尺寸（来自 meta；未声明时 640）。 */
     @Volatile

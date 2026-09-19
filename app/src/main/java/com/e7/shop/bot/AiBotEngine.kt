@@ -21,10 +21,16 @@ import com.e7.shop.data.RecordStore
  */
 class AiBotEngine(
     private val host: BotEngine.Host,
-    private val generation: Int
+    private val generation: Int,
+    /**
+     * 视觉引擎：默认仍是 YoloEngine（生产行为不变）。
+     *
+     * 参数化只为可测性（2026-09-19）：AI 管线原先硬编码 `YoloEngine()`，
+     * 于是 FSM 整机测试无法注入假视觉 —— 而"两条管线各自演化"正是本项目的系统性风险，
+     * 必须能用同一套假 Host 同时约束两条管线。
+     */
+    private val vision: RecognitionEngine = YoloEngine()
 ) {
-
-    private val vision = YoloEngine()
     private val planner = ClickPlanner()
 
     private enum class Phase {
