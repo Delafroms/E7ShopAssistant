@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+（API 31+）的备份 / 换机迁移规则。
+
+  为什么需要：AndroidManifest 的 allowBackup=true 会把应用私有数据纳入云备份与
+  设备间迁移（D2D），而 e7_secrets.xml 里存的是坚果云 WebDAV 应用密码（明文）。
+  密码绝不该离开设备 —— 这里把它排除掉；配置（e7_config.xml）仍照常备份，
+  换机后主题、阈值等设置不会丢。
+
+  注意：domain="sharedpref" 的 path 是**文件名**（含 .xml 后缀），不是键名。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="e7_secrets.xml" />
+        <!-- 全屏游戏截图：隐私内容 + 体积大（挤爆 25MB 配额会让整包备份失败） -->
+        <exclude domain="file" path="debug_last.png" />
+        <!-- 外部私有目录：运行日志与原始截图采集 -->
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="e7_secrets.xml" />
+        <exclude domain="file" path="debug_last.png" />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 及以下（API 30 及以下）的备份规则（fullBackupContent）。
+
+  与 data_extraction_rules.xml 同样的目的：排除存有 WebDAV 密码的凭据文件，
+  防止密码随 adb backup / 云备份离开设备。
+
+  两个文件都必须存在：minSdk=30、targetSdk=36 时，系统按运行版本二选一，
+  只声明其中一个会导致另一个版本上规则缺失（静默失效）。
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="e7_secrets.xml" />
+    <!-- debug_last.png 是**全屏游戏截图**（含昵称/货币/弹窗内容），属隐私内容；
+         它每 8 秒就被覆写一次，且体积大，会把 Auto Backup 的 25MB 配额挤爆 ——
+         配额一爆，整包备份失败，连 e7_config（主题/阈值）都备不了。 -->
+    <exclude domain="file" path="debug_last.png" />
+    <!-- 外部私有目录：运行日志（单轮 5~15MB、保留 30 轮）与原始截图采集（数十张，每张数 MB） -->
+    <exclude domain="external" path="." />
+</full-backup-content>

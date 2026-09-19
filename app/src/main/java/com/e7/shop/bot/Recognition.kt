@@ -23,7 +23,31 @@ import android.graphics.Color
  * 每个候选携带 evidence 链，识别错误时可回答"为什么认为是这个商品"。
  */
 
-enum class Scene { SHOP_LIST, REFRESH_DLG, BUY_DLG, OTHER }
+/**
+ * native 识别失败的限流日志（跨引擎共用）。
+ *
+ * 为什么必须记：旧版把 OCR/YOLO 的异常静默吞成 emptyList()，导致「native 崩了」
+ * 和「画面本来就没有文字」在上层完全不可区分，日志里也没有任何痕迹
+ * —— 而排查漏买时最想知道的恰恰是这一条。
+ *
+ * 为什么限流：失败往往持续发生（每帧一次），不限流会瞬间刷爆日志文件。
+ * 只在第 1 次与每 50 次各记一条。
+ */
+private val ocrFailCount = java.util.concurrent.atomic.AtomicInteger(0)
+private val yoloFailCount = java.util.concurrent.atomic.AtomicInteger(0)
+
+private fun notePerceptionFailure(
+    kind: String,
+    counter: java.util.concurrent.atomic.AtomicInteger,
+    e: Throwable
+) {
+    val n = counter.incrementAndGet()
+    if (n == 1 || n % 50 == 0) {
+        android.util.Log.e("E7SA.Percep", "$kind failed x$n: ${e.javaClass.simpleName}: ${e.message}")
+    }
+}
+
+enum class Scene { SHOP_LIST, REFRESH_DLG, BUY_DLG, NET_ERROR, OTHER }
 
 /** 一个目标候选（商品行），含可解释证据链。 */
 data class Candidate(
@@ -79,6 +103,27 @@ interface RecognitionEngine {
 
 internal val CONFIRM_KW = listOf("确认", "确定", "確认", "確認", "ok", "confirm", "はい")
 internal val CANCEL_KW = listOf("取消", "cancel", "キャンセル")
+
+/**
+ * 网络异常弹窗（2026-09-19 新增，依据用户提供的实机截图）。
+ *
+ * 实测样本：正文「网络连接异常，请重新连接。」+ 按钮「点击重试」。
+ * **为什么用 OCR 而不是训练模型**：这是纯文本弹窗，OCR 一次就读到、且是精确匹配；
+ * 训一个 YOLO 类需要几十张标注样本 + 重训 + 重导模型，收益完全不对等。
+ * 项目里另外两个弹窗（购买 / 刷新）本来就是 OCR 关键词判定的，这里保持同一套机制。
+ */
+internal val NET_ERR_KW = listOf("网络连接异常", "请重新连接")
+
+/**
+ * 网络异常弹窗上的重试按钮文字。
+ *
+ * ⚠ **只能放完整短语**（2026-09-19 事故）：原先这里还有裸的 `重试`，
+ * 而 App 自己的错误文案「网络异常弹窗 → 已点击重试」就显示在悬浮窗上、会被 OCR 读到
+ * → 命中关键词 → 又判成网络弹窗 → 又点重试 → **自己触发自己、无限循环**，
+ * 而且点在悬浮窗自己的文字上（实测乱点到了系统控制中心与桌面）。
+ * 现在只认「点击重试」；读不到就退化为点弹窗中心。
+ */
+internal val RETRY_KW = listOf("点击重试")
 internal val BUY_KW = listOf("购买", "購買", "buy", "purchase", "購入")
 private val BUY_TITLE_KW = listOf("购买商品", "購買商品", "确定要购买", "確定要購買", "是否购买", "是否購買", "confirm purchase")
 internal val REFRESH_BTN_KW = listOf("立即更新", "refresh", "更新")
@@ -131,9 +176,25 @@ private fun flagsOf(lines: List<PpOcr.OcrLine>): BooleanArray = booleanArrayOf(
 fun sceneOf(lines: List<PpOcr.OcrLine>): Scene {
     val f = flagsOf(lines)
     return when {
+        // ⚠ 网络异常弹窗**必须最先判定**（2026-09-19）：它是盖在商店列表上的模态窗，
+        // 列表的「立即更新」等文字仍会被 OCR 读到 —— 若不先判，整屏会被当成正常
+        // SHOP_LIST，然后卡在「「立即更新」按钮无法视觉确认（彩色占比 0.00）」
+        // 反复 undecided（实测日志 01:32:52 就是这么卡的）。
+        lines.any { hasAny(it.text, NET_ERR_KW) } -> Scene.NET_ERROR
         f[4] && f[0] -> Scene.REFRESH_DLG
         f[3] || (f[1] && f[2]) -> Scene.BUY_DLG
         f[5] -> Scene.SHOP_LIST
+        // ⚠ 漏买修复（2026-09-18，89 张真实截图基准暴露的真实漏买路径）：
+        //
+        // 商店列表原先**只认「立即更新」按钮文本**。一旦该按钮被遮挡、滚出画面
+        // 或 OCR 漏读，整屏就被判成 OTHER → 决策层直接 WAIT →
+        // **识别层明明检出了奖牌，也一个都不会买**（漏买且无任何日志痕迹）。
+        // 实测样本：某张图 gt=2 且检出 2 个正确候选，却因 scene=OTHER 全程不动。
+        //
+        // 现在补一条**并列证据**：读到商品名（奖牌/书签）**且**存在「购买」按钮。
+        // 后者是关键约束——App 自身界面的统计区也写着"神秘奖牌"，但那里没有购买键，
+        // 因此不会被误判成商店列表而触发误买。
+        lines.any { itemKind(it.text) != null } && f[2] -> Scene.SHOP_LIST
         else -> Scene.OTHER
     }
 }
@@ -304,6 +365,39 @@ fun frameFingerprint(r: DetectionResult): String {
     return sb.toString().hashCode().toString()
 }
 
+/**
+ * didScroll 的**复用缓冲**（2026-09-18 修复）。
+ *
+ * 旧版每次调用都分配 2×IntArray(regW×regH)：2800×1272 上采样窗约 1820×1195，
+ * 单个数组 2.17M int ≈ 8.7MB，一次调用 17.4MB。而刷新等待循环每帧调一次
+ * （framesFor(18000) 最多 40 帧）→ 单次等待就有数百 MB 的分配压力，
+ * 且 `catch (Exception)` 捕不到 OutOfMemoryError（它是 Error）→ 进程被杀。
+ *
+ * 按线程持有：bot 线程每轮新建、结束后随之释放，既不跨会话泄漏，也不需要锁。
+ */
+private class ScrollBuffers {
+    private var w = -1
+    private var h = -1
+    var a: IntArray = IntArray(0)
+        private set
+    var b: IntArray = IntArray(0)
+        private set
+
+    fun ensure(width: Int, height: Int) {
+        if (width == w && height == h) return
+        w = width
+        h = height
+        a = IntArray(width * height)
+        b = IntArray(width * height)
+    }
+}
+
+// 匿名子类提供 initialValue()，get() 因此永远不会返回 null；
+// 后面仍写 ?: 兜底，是为了消掉 Kotlin 对 ThreadLocal.get() 的可空推断警告。
+private val scrollBuffers = object : ThreadLocal<ScrollBuffers>() {
+    override fun initialValue(): ScrollBuffers = ScrollBuffers()
+}
+
 /** 列表是否真的滚动了（截图对比，仅验证手势，与点击无关；两套点击逻辑共用）。 */
 fun didScroll(a: Bitmap, b: Bitmap): Boolean {
     return try {
@@ -317,8 +411,10 @@ fun didScroll(a: Bitmap, b: Bitmap): Boolean {
         if (x2 <= x1 || y2 <= y1) return false
         val regW = x2 - x1
         val regH = y2 - y1
-        val pa = IntArray(regW * regH)
-        val pb = IntArray(regW * regH)
+        val bufs = scrollBuffers.get() ?: ScrollBuffers()
+        bufs.ensure(regW, regH)
+        val pa = bufs.a
+        val pb = bufs.b
         a.getPixels(pa, 0, regW, x1, y1, regW, regH)
         b.getPixels(pb, 0, regW, x1, y1, regW, regH)
         var diff = 0
@@ -337,7 +433,10 @@ fun didScroll(a: Bitmap, b: Bitmap): Boolean {
             }
         }
         total > 0 && diff.toDouble() / total > Tuning.SCROLL_DIFF_RATIO
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
+        // 捕 Throwable 而不只是 Exception：OOM 是 Error，旧版捕不到 —— 一旦发生就直接
+        // 把进程带走。这里退化为"判定为没动"，让上层走自己的重试/退避逻辑。
+        android.util.Log.w("E7SA.Percep", "didScroll failed: " + e.javaClass.simpleName)
         false
     }
 }
@@ -356,7 +455,8 @@ fun dialogConfirmed(r: DetectionResult, bmp: Bitmap, kind: String): Boolean {
 
 /** 价格严格匹配：唯一一条 6 位数字行等于期望价格（歧义 -> 拒绝）。 */
 fun priceMatches(r: DetectionResult, kind: String): Boolean {
-    val expect = if (kind == "bookmark") "184000" else "280000"
+    val expect = if (kind == "bookmark") Tuning.BOOKMARK_PRICE.toString()
+    else Tuning.MEDAL_PRICE.toString()
     val candidates = r.lines.mapNotNull { l ->
         val d = l.text.filter { it.isDigit() }
         if (d.length == 6) d else null
@@ -387,15 +487,22 @@ class YoloEngine : RecognitionEngine {
      */
     override fun hasIconFast(bmp: Bitmap): Boolean {
         if (sleepMode) return true
-        val boxes = try { YoloDet.detect(bmp) } catch (e: Throwable) { emptyList() }
+        val boxes = try { YoloDet.detect(bmp) } catch (e: Throwable) {
+            // 快速探测失败 → 返回 false → 整屏会被跳过（漏买方向），必须留痕
+            notePerceptionFailure("yolo-fast", yoloFailCount, e); emptyList()
+        }
         return boxes.any { it.isIcon && it.prob >= Tuning.ICON_CONF_FAST }
     }
 
     override fun analyze(bmp: Bitmap): DetectionResult {
         val t0 = System.currentTimeMillis()
-        val lines = try { PpOcr.recognize(bmp) } catch (e: Throwable) { emptyList() }
+        val lines = try { PpOcr.recognize(bmp) } catch (e: Throwable) {
+            notePerceptionFailure("ocr", ocrFailCount, e); emptyList()
+        }
         val t1 = System.currentTimeMillis()
-        val boxes = try { YoloDet.detect(bmp) } catch (e: Throwable) { emptyList() }
+        val boxes = try { YoloDet.detect(bmp) } catch (e: Throwable) {
+            notePerceptionFailure("yolo", yoloFailCount, e); emptyList()
+        }
         val t2 = System.currentTimeMillis()
         val scene = sceneOf(lines)
         // 候选 = YOLO 图标框 ∪ OCR 商品名行（按行合并，冲突剔除）
@@ -444,7 +551,9 @@ class TraditionalEngine : RecognitionEngine {
 
     override fun analyze(bmp: Bitmap): DetectionResult {
         val t0 = System.currentTimeMillis()
-        val lines = try { PpOcr.recognize(bmp) } catch (e: Throwable) { emptyList() }
+        val lines = try { PpOcr.recognize(bmp) } catch (e: Throwable) {
+            notePerceptionFailure("ocr", ocrFailCount, e); emptyList()
+        }
         val scene = sceneOf(lines)
         val raw = ArrayList<Candidate>()
 

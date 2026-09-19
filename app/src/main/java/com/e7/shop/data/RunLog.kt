@@ -119,8 +119,36 @@ class RunLog(context: Context) {
         }
     }
 
+    /**
+     * 关键事件持久日志（购买 / 候选过滤 / 会话汇总）：**独立文件、不参与轮转删除**。
+     *
+     * 为什么必须单独存：会话日志按轮转保留（见 [pruneOldFiles]），玩家连续挂机多次后
+     * 早期会话会被删掉 —— 而"这一晚到底买到了什么、漏掉了什么"恰恰是最需要长期留存的
+     * 举证材料。这个文件只追加、不参与轮转，体积增长极慢（每次购买/漏买一行）。
+     */
+    fun critical(tag: String, msg: String) {
+        val d = dir ?: return
+        synchronized(lock) {
+            try {
+                val f = File(d, CRITICAL_NAME)
+                if (f.exists() && f.length() > CRITICAL_MAX_BYTES) {
+                    // 超限时滚成 .1 备份（只保留上一份），避免无限增长
+                    val bak = File(d, "$CRITICAL_NAME.1")
+                    if (bak.exists()) bak.delete()
+                    f.renameTo(bak)
+                }
+                f.appendText("${fmt.format(Date())}  ${tag.padEnd(14)}  $msg\n")
+            } catch (e: Exception) {
+                // 关键日志写失败也绝不能影响机器人运行
+            }
+        }
+    }
+
     /** 当前日志文件路径（供 UI 显示 / 分享）。 */
     fun path(): String = sessionFile?.absolutePath ?: file?.absolutePath ?: "-"
+
+    /** 关键事件日志路径（购买/漏买举证）。 */
+    fun criticalPath(): String = dir?.let { File(it, CRITICAL_NAME).absolutePath } ?: "-"
 
     /** 日志总大小（含历史会话文件），供 UI 显示。 */
     fun totalBytes(): Long {
@@ -151,8 +179,18 @@ class RunLog(context: Context) {
 
         /** 未开始会话时的兜底文件名（正常情况下每轮都会新建 run_*.log）。 */
         private const val FILE_NAME = "e7sa_run.log"
-        /** 保留最近多少个会话日志（每轮约 5~15MB）。 */
-        private const val MAX_SESSION_FILES = 10
+        /**
+         * 保留最近多少个会话日志（每轮约 5~15MB）。
+         *
+         * 10 → 30：玩家反馈"挂机几晚后想回看某一晚，日志已经没了"。
+         * 30 轮按每轮 15MB 上限约 450MB，外部私有目录可承受。
+         */
+        private const val MAX_SESSION_FILES = 30
+
+        /** 关键事件持久文件（购买/漏买），不参与轮转。 */
+        private const val CRITICAL_NAME = "e7sa_critical.log"
+        /** 关键事件文件的大小上限，超过则滚成 .1 备份。 */
+        private const val CRITICAL_MAX_BYTES = 4L * 1024 * 1024
 
         /** 关闭：不写任何日志。 */
         const val LEVEL_OFF = "off"

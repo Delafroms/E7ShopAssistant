@@ -491,31 +491,79 @@ private fun toast(context: Context, msg: String) {
     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 }
 
-internal fun decodeFileSafe(f: java.io.File): Bitmap? =
-    try { BitmapFactory.decodeFile(f.absolutePath) } catch (e: Exception) { null }
+/**
+ * 图片解码的采样宽度上限（px）。
+ *
+ * 2026-09-18 加固：旧版这三个 helper 直接 decodeFile/decodeStream，没有任何下采样。
+ * 调用点全在 Compose 的 `remember{}`（= 组合期 = 主线程），一张 48MP 相册图在
+ * ARGB_8888 下约 190MB —— **必然 OOM 崩在选图那一刻**。
+ * 界面实际只需要 ~1080 宽，采样后内存降到几 MB。
+ * （EquipmentScoreActivity 早就写对了同一套路，这里对齐它。）
+ */
+private const val DECODE_TARGET_W = 1080
+
+/** 按 2 的幂次求采样率，保证解码后的短边不小于目标宽度。 */
+private fun sampleSizeFor(w: Int, h: Int, targetW: Int): Int {
+    if (w <= 0 || h <= 0) return 1
+    var sample = 1
+    var cw = w
+    var ch = h
+    while (cw / 2 >= targetW && ch / 2 >= targetW) {
+        cw /= 2
+        ch /= 2
+        sample *= 2
+    }
+    return sample
+}
+
+private fun decodeFileSampled(path: String, targetW: Int = DECODE_TARGET_W): Bitmap? = try {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+        inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, targetW)
+    })
+} catch (e: OutOfMemoryError) {
+    null
+} catch (e: Exception) {
+    null
+}
+
+private fun decodeStreamSampled(ctx: Context, uri: Uri, targetW: Int = DECODE_TARGET_W): Bitmap? = try {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+    ctx.contentResolver.openInputStream(uri)?.use {
+        BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply {
+            inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, targetW)
+        })
+    }
+} catch (e: OutOfMemoryError) {
+    null
+} catch (e: Exception) {
+    null
+}
+
+internal fun decodeFileSafe(f: java.io.File): Bitmap? = decodeFileSampled(f.absolutePath)
 
 internal fun loadLogoBitmap(ctx: Context, cfg: AppConfig): Bitmap? {
     return try {
         if (cfg.logoMode == "custom" && cfg.customLogoPath.isNotEmpty()) {
             if (cfg.customLogoPath.startsWith("content://")) {
-                ctx.contentResolver.openInputStream(Uri.parse(cfg.customLogoPath))?.use { ins ->
-                    BitmapFactory.decodeStream(ins)
-                }
-            } else BitmapFactory.decodeFile(cfg.customLogoPath)
+                decodeStreamSampled(ctx, Uri.parse(cfg.customLogoPath))
+            } else decodeFileSampled(cfg.customLogoPath)
         } else {
-            ctx.assets.open("logo_official.png").use { ins -> BitmapFactory.decodeStream(ins) }
+            // 内置 logo 是打包资源，尺寸可控，但同样走采样以统一内存上限
+            ctx.assets.open("logo_official.png").use { ins ->
+                BitmapFactory.decodeStream(ins, null, BitmapFactory.Options().apply { inSampleSize = 1 })
+            }
         }
-    } catch (e: Exception) { null }
+    } catch (e: OutOfMemoryError) { null } catch (e: Exception) { null }
 }
 
 internal fun loadBgBitmap(ctx: Context, cfg: AppConfig): Bitmap? {
     val src = cfg.bgImage
     if (src.isEmpty()) return null
     return try {
-        if (src.startsWith("content://")) {
-            ctx.contentResolver.openInputStream(Uri.parse(src))?.use { ins ->
-                BitmapFactory.decodeStream(ins)
-            }
-        } else BitmapFactory.decodeFile(src)
-    } catch (e: Exception) { null }
+        if (src.startsWith("content://")) decodeStreamSampled(ctx, Uri.parse(src))
+        else decodeFileSampled(src)
+    } catch (e: OutOfMemoryError) { null } catch (e: Exception) { null }
 }

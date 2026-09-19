@@ -20,6 +20,34 @@ class AppConfig(context: Context) {
     private val sp: SharedPreferences =
         context.getSharedPreferences("e7_config", Context.MODE_PRIVATE)
 
+    /**
+     * 凭据专用存储：**独立文件**，且被备份规则排除
+     * （见 res/xml/data_extraction_rules.xml 与 res/xml/backup_rules.xml）。
+     *
+     * 为什么拆出来：WebDAV 应用密码原先明文存在 e7_config 里，而 AndroidManifest 的
+     * allowBackup=true 且没有任何豁免规则 → 密码会随云备份 / 换机迁移（D2D）被带走，
+     * 旧设备上还能被 adb backup 直接读走。拆成独立文件后，备份规则只需排除这一个文件，
+     * 配置本身（主题、阈值等）仍能正常备份。
+     *
+     * 为什么不用 EncryptedSharedPreferences：androidx.security:security-crypto 已被
+     * Google 标记 deprecated，且其密钥不可导出 —— 换机后密码必然解不开，用户反而要重输；
+     * 本方案零依赖、行为可预测，已足以消除"凭据随备份外流"这条真实路径。
+     */
+    private val secrets: SharedPreferences =
+        context.getSharedPreferences("e7_secrets", Context.MODE_PRIVATE)
+
+    init {
+        // 一次性迁移：把旧版留在 e7_config 里的明文密码搬到独立凭据文件，并清除原值。
+        // 只在新文件尚无该键时搬运，避免覆盖用户升级后新设的密码。
+        val legacy = sp.getString("wdPassword", null)
+        if (legacy != null) {
+            if (!secrets.contains("wdPassword")) {
+                secrets.edit().putString("wdPassword", legacy).apply()
+            }
+            sp.edit().remove("wdPassword").apply()
+        }
+    }
+
     companion object {
         /**
          * 拟人化点击偏移的**硬上限**（像素）—— UI 可设范围与运行时夹取范围的唯一来源。
@@ -32,6 +60,10 @@ class AppConfig(context: Context) {
          * 因此不能放在 `bot/Tuning`。
          */
         const val TAP_OFFSET_MAX_PX = 4
+
+        /** 拟人化延迟的硬边界（ms）：防止手滑输入超大值把机器人变成"卡死"。 */
+        const val DELAY_MIN_MS = 50
+        const val DELAY_MAX_MS = 30_000
     }
 
     /* ---- bot settings ---- */
@@ -94,13 +126,36 @@ class AppConfig(context: Context) {
         set(v) = sp.edit().putInt("speedMult", v.coerceIn(1, 3)).apply()
 
     /* ---- humanize params ---- */
+    /**
+     * 随机延迟下限/上限（ms）。
+     *
+     * getter 与 setter 都夹取（2026-09-18 加固）：旧版没有任何上下界校验，而设置页的
+     * 数字输入框允许 9 位数字 —— 手滑填成 999999999 就是 11.5 天，机器人表现为"卡死"，
+     * 玩家只会以为程序挂了。夹取后"显示值 = 生效值"，与 offsetPx 同一原则。
+     */
     var delayMinMs: Int
-        get() = sp.getInt("delayMin", 350)
-        set(v) = sp.edit().putInt("delayMin", v).apply()
+        get() = sp.getInt("delayMin", 350).coerceIn(DELAY_MIN_MS, DELAY_MAX_MS)
+        set(v) = sp.edit().putInt("delayMin", v.coerceIn(DELAY_MIN_MS, DELAY_MAX_MS)).apply()
 
     var delayMaxMs: Int
-        get() = sp.getInt("delayMax", 1100)
-        set(v) = sp.edit().putInt("delayMax", v).apply()
+        get() = sp.getInt("delayMax", 1100).coerceIn(DELAY_MIN_MS, DELAY_MAX_MS)
+        set(v) = sp.edit().putInt("delayMax", v.coerceIn(DELAY_MIN_MS, DELAY_MAX_MS)).apply()
+
+    /**
+     * 无障碍保活豁免：把本应用加入系统的「无障碍服务自动关闭」豁免名单。
+     *
+     * 背景（2026-09-18 实测事故）：ColorOS 会在无障碍服务运行几分钟后弹一个**不遮画面
+     * 但拦截全部输入**的模态框，导致整夜 567 次点击只有 2 次生效。
+     *
+     * 为什么默认开：这个弹窗会让挂机彻底失效，且玩家看不到原因。
+     * 为什么改成只写豁免名单：旧版还额外把**全设备级**的 accessibility_turn_off_switch
+     * 写成 0 —— 那等于对本机所有 App 关掉系统的安全确认，属于超出授权范围的用途，
+     * 而且永不恢复。豁免名单只影响本应用，影响面小得多。
+     * 需要用户明确知情：本开关就是"允许本应用修改这一项系统设置"的显式授权。
+     */
+    var accExemptFromAutoOff: Boolean
+        get() = sp.getBoolean("accExemptFromAutoOff", true)
+        set(v) = sp.edit().putBoolean("accExemptFromAutoOff", v).apply()
 
     /**
      * 拟人化点击偏移（像素），取值范围 [0, [TAP_OFFSET_MAX_PX]]。
@@ -240,6 +295,21 @@ class AppConfig(context: Context) {
         get() = sp.getBoolean("floatyEnabled", true)
         set(v) = sp.edit().putBoolean("floatyEnabled", v).apply()
 
+    /**
+     * 悬浮窗**户型**：
+     *  · `""`（默认）—— **跟随主题**：Blue Archive 明亮主题用侧栏轨道，
+     *    其余主题（Steam / OLED）用经典胶囊；
+     *  · `classic` —— 强制经典：胶囊贴顶，展开后按钮在**底部**；
+     *  · `rail`    —— 强制侧栏轨道：竖条贴右边，展开后按钮在**顶部**。
+     *
+     * 户型只改变布局与操作顺序，**功能集合完全一致**
+     * （开始/暂停/停止、阶段、时长、引擎、模型与截图健康、错误、6 项统计、
+     * 事件日志、展开收起、拖拽移动 —— 见 ui/FloatySkin.kt 的契约表）。
+     */
+    var floatyLayout: String
+        get() = sp.getString("floatyLayout", "") ?: ""
+        set(v) = sp.edit().putString("floatyLayout", v).apply()
+
     /* ---- Jianguoyun WebDAV ---- */
     var wdServer: String
         get() = sp.getString("wdServer", "https://dav.jianguoyun.com/dav/") ?: ""
@@ -249,9 +319,10 @@ class AppConfig(context: Context) {
         get() = sp.getString("wdAccount", "") ?: ""
         set(v) = sp.edit().putString("wdAccount", v).apply()
 
+    /** WebDAV 应用密码：存独立凭据文件（被备份规则排除，不随云备份/换机迁移外流）。 */
     var wdPassword: String
-        get() = sp.getString("wdPassword", "") ?: ""
-        set(v) = sp.edit().putString("wdPassword", v).apply()
+        get() = secrets.getString("wdPassword", "") ?: ""
+        set(v) = secrets.edit().putString("wdPassword", v).apply()
 
     var wdRemoteDir: String
         get() = sp.getString("wdRemoteDir", "E7ShopAssistant") ?: ""

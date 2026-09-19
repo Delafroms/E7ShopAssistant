@@ -1,4 +1,4 @@
-﻿package com.e7.shop.diag
+package com.e7.shop.diag
 
 import android.content.res.AssetManager
 import android.graphics.Bitmap
@@ -46,8 +46,8 @@ class DiagnosticsRunner(
      */
     fun runBenchmark(): String {
         if (isBotRunning()) return "benchmark skipped: bot running"
-        val entries = listAssetDir("benchmark/positive")
-        val negEntries = listAssetDir("benchmark/negative")
+        val entries = listBenchDir("benchmark/positive")
+        val negEntries = listBenchDir("benchmark/negative")
         if (entries.isEmpty() && negEntries.isEmpty()) return "benchmark skipped: no dataset"
 
         val allNames = (entries + negEntries).sorted()
@@ -113,14 +113,14 @@ class DiagnosticsRunner(
 
         for (name in allNames) {
             try {
-                val raw = readAsset("benchmark/positive/$name")
-                    ?: readAsset("benchmark/negative/$name")
+                val raw = readBenchData("benchmark/positive/$name")
+                    ?: readBenchData("benchmark/negative/$name")
                     ?: continue
                 val bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size) ?: continue
                 val scene = if (bmp.config != Bitmap.Config.ARGB_8888)
                     bmp.copy(Bitmap.Config.ARGB_8888, false) else bmp
                 val stem = name.substringBeforeLast('.')
-                val annText = readAsset("benchmark/annotations/$stem.json")?.decodeToString()
+                val annText = readBenchData("benchmark/annotations/$stem.json")?.decodeToString()
                 val gt = annText?.let { parseGtText(it) } ?: emptyList()
                 val t0 = System.currentTimeMillis()
                 val snap = engine.analyze(scene)
@@ -188,6 +188,8 @@ class DiagnosticsRunner(
     fun captureRaw(n: Int): String {
         val dir = File(externalFilesDir, "raw_capture")
         if (!dir.exists()) dir.mkdirs()
+        // 采集前先裁剪历史：该目录此前只增不减，实机已堆积 103 张原图（每张数 MB）
+        pruneRawCapture(dir)
         val requested = n.coerceIn(1, MAX_RAW_CAPTURE)
         var saved = 0
         var failed = 0
@@ -215,11 +217,67 @@ class DiagnosticsRunner(
         return "{\"dir\":\"${dir.absolutePath}\",\"requested\":$requested,\"saved\":$saved,\"failed\":$failed}"
     }
 
+    /**
+     * 清理历史采集图：只保留最近 [MAX_RAW_CAPTURE_KEEP] 张。
+     *
+     * 为什么需要：这个目录此前只增不减，实机已堆积 103 张原图（2800×1272 PNG，
+     * 单张数 MB），长期挂机+采集会持续占用外部存储。
+     * 文件名前缀是时间戳，字典序即时间序，因此按名字排序即可判断新旧。
+     *
+     * 保留策略：只在采集前裁剪，所以稳态上限 = MAX_RAW_CAPTURE_KEEP + 单次采集上限。
+     * 清理失败只影响存储占用，绝不影响采集本身。
+     */
+    private fun pruneRawCapture(dir: File) {
+        try {
+            val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".png") } ?: return
+            if (files.size <= MAX_RAW_CAPTURE_KEEP) return
+            files.sortedBy { it.name }.dropLast(MAX_RAW_CAPTURE_KEEP).forEach { it.delete() }
+        } catch (e: Exception) {
+            Log.w(TAG, "prune raw capture failed: " + e.message)
+        }
+    }
+
     private fun listAssetDir(path: String): List<String> =
         try { assets.list(path)?.toList() ?: emptyList() } catch (e: Exception) { emptyList() }
 
     private fun readAsset(path: String): ByteArray? =
         try { assets.open(path).use { it.readBytes() } } catch (e: Exception) { null }
+
+    /**
+     * 枚举基准数据集目录：**外部目录优先，为空才回退 assets**。
+     *
+     * 为什么要外部目录：真实回归集是近百张 2800×1272 的游戏截图（约 40MB），
+     * 打包进 assets 会让 APK 体积暴涨，而且每扩充一次测试集都要重新发版。
+     * 放到外部私有目录（`Android/data/com.e7.shop/files/benchmark/…`）后，
+     * 直接推文件即可扩充，APK 体积不变，也不需要 root。
+     *
+     * 为什么"外部非空就只用外部"而不是两者合并：混测会让"这次召回 100%"
+     * 无法判断是 14 张冒烟集还是 89 张真实集的结果，指标失去可比性。
+     */
+    private fun listBenchDir(path: String): List<String> {
+        try {
+            val ext = File(externalFilesDir, path)
+            if (ext.isDirectory) {
+                val names = ext.listFiles { f: File -> f.isFile && f.name.endsWith(".jpg", true) }
+                    ?.map { it.name }?.sorted()
+                if (!names.isNullOrEmpty()) return names
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "list external bench dir failed: " + e.message)
+        }
+        return listAssetDir(path)
+    }
+
+    /** 读取基准数据：外部目录优先，回退 assets（与 [listBenchDir] 同源同规则）。 */
+    private fun readBenchData(path: String): ByteArray? {
+        try {
+            val ext = File(externalFilesDir, path)
+            if (ext.isFile) return ext.readBytes()
+        } catch (e: Exception) {
+            Log.w(TAG, "read external bench file failed: " + e.message)
+        }
+        return readAsset(path)
+    }
 
 
     /** 回归台标注目标（kind + 行中心 y）。 */
@@ -237,6 +295,12 @@ class DiagnosticsRunner(
 
         /** 单次原始截图采集的上限张数。 */
         const val MAX_RAW_CAPTURE = 100
+
+        /**
+         * 采集前保留的历史图数量（见 [pruneRawCapture]）。
+         * 取 30：够看清"上一次采集"的样本，又不会让目录无限膨胀。
+         */
+        const val MAX_RAW_CAPTURE_KEEP = 30
 
         /** 原始截图采集的帧间隔（ms）。 */
         const val RAW_CAPTURE_INTERVAL_MS = 1500L

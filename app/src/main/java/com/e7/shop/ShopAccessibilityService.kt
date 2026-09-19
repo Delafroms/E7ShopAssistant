@@ -74,8 +74,18 @@ class ShopAccessibilityService : AccessibilityService() {
     var foregroundOk: Boolean = false
         private set
 
-    /** 本会话已处理（买过/售罄）的行。每次 start 无条件清空。 */
-    private val handledRows = HashSet<Int>()
+    /**
+     * 本会话已处理（买过/售罄）的行。每次 start 无条件清空。
+     *
+     * **必须是线程安全集合**（2026-09-18 修复）：写入方是 bot 线程（handledAdd），
+     * 读取方也是 bot 线程（handledContains 用 any{} 迭代），但 startBot 会在**主线程**
+     * 清空它，而 startBot 只 interrupt 旧线程、不 join（旧线程可能还在跑）
+     * → 旧版用裸 HashSet 时，主线程 clear 撞上 bot 线程迭代会抛
+     * ConcurrentModificationException，被引擎的 catch(Exception) 吞成
+     * "engine aborted"，会话莫名提前结束。
+     * ConcurrentHashMap.newKeySet() 的迭代是弱一致的，不会抛 CME。
+     */
+    private val handledRows: MutableSet<Int> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     private var botThread: Thread? = null
 
@@ -102,6 +112,52 @@ class ShopAccessibilityService : AccessibilityService() {
             android.util.Log.i("E7SA.YoloDet", "YOLOv8 load=$ok")
         }.start()
         startForegroundCompat()
+        // 关闭系统对无障碍服务的"自动关闭"机制（实测事故驱动，见方法注释）
+        ensureAccessibilityNotAutoDisabled()
+    }
+
+    /**
+     * 关闭 ColorOS 的「无障碍服务自动关闭」机制。
+     *
+     * ## 为什么必须做（2026-09-18 实测事故）
+     *
+     * ColorOS 会在无障碍服务运行几分钟后弹出「E7SA 持续使用无障碍服务，是否保持开启？」
+     * 的**模态对话框**。它的危险之处在于**不遮住画面**：
+     * 截图依旧完整、OCR 读到 3807 次 SHOP_LIST、YOLO 框全部正常 ——
+     * 但它**拦截了全部输入**：机器人 567 次点击「立即更新」只有 2 次生效，
+     * 整晚 5 小时 25 分只成功刷新 2 次，564 次报「刷新弹窗未出现」。
+     * 玩家看到的现象就是"挂了一夜，什么都没发生"。
+     *
+     * ## 该行为由 secure 设置控制
+     *
+     *  · `accessibility_turn_off_switch=1` → 开启自动关闭（出厂默认）
+     *  · `accessibility_turn_off_skip_package` → 豁免包名列表（原本不含本应用）
+     *
+     * 本服务持有 WRITE_SECURE_SETTINGS，因此可在每次连接时把**自己**加入豁免列表。
+     *
+     * ⚠ 2026-09-18 安全审查修正：**不再改写全设备级的 accessibility_turn_off_switch**。
+     * 那个开关是"这台设备上所有无障碍服务是否弹确认框"的总开关，关掉它等于对**所有 App**
+     * 关掉 Android 对抗无障碍滥用类恶意软件的关键防线，而且旧代码永不恢复它、
+     * 用户也无从知晓 —— 属于超出授权范围的静默行为（授权时说明的用途只有"一键开启无障碍"）。
+     * 现在只写 skip_package（只影响本应用），且由设置页的「无障碍保活豁免」开关显式授权。
+     */
+    private fun ensureAccessibilityNotAutoDisabled() {
+        if (!cfg.accExemptFromAutoOff) {
+            android.util.Log.i("E7SA.Acc", "无障碍豁免已在设置中关闭，不改动任何系统设置")
+            return
+        }
+        try {
+            val cr = contentResolver
+            val key = "accessibility_turn_off_skip_package"
+            val cur = Settings.Secure.getString(cr, key) ?: ""
+            if (!cur.contains(packageName)) {
+                Settings.Secure.putString(cr, key, if (cur.isBlank()) packageName else "$cur:$packageName")
+                android.util.Log.i("E7SA.Acc", "已把自身加入无障碍豁免列表")
+            }
+        } catch (e: Exception) {
+            // 没有该设置的 ROM 会走到这里，属正常情况；不影响其他功能
+            android.util.Log.w("E7SA.Acc", "无法调整无障碍自动关闭设置: ${e.message}")
+        }
     }
 
     /** Bring the accessibility service up as a foreground service (process keep-alive). */
@@ -137,7 +193,10 @@ class ShopAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        stopBot()
+        // 服务销毁必须用阻塞版：引擎线程持有 Service 引用（resources / assets），
+        // 在 Service 失效后继续访问会崩。此时不在用户交互路径上，等待不会触发 ANR。
+        generation.incrementAndGet()
+        stopBotInternal()
         if (instance === this) instance = null
         super.onDestroy()
     }
@@ -164,7 +223,15 @@ class ShopAccessibilityService : AccessibilityService() {
             // the floating ball is owned by the SERVICE (not the Activity):
             // OEM "game space" reclamation of a backgrounded Activity must
             // never kill the ball while the bot runs
-            updateFloaty()
+            //
+            // ⚠ cfg / floaty 是 lateinit + lazy，在 onServiceConnected 里初始化。
+            // 服务被重建（覆盖安装、进程重启）时，队列里可能残留上一轮的 post，
+            // 它会在 cfg 就绪之前跑到这里 —— 实测崩溃（2026-09-19 01:47:51，
+            // 由新增的全局崩溃处理器抓到）：
+            //   lateinit property cfg has not been initialized
+            //     at ShopAccessibilityService.getFloaty -> updateFloaty -> publish$lambda$3
+            // 加这一道判断即可（此时也不该有悬浮窗可更新）。
+            if (::cfg.isInitialized) updateFloaty()
         }
     }
 
@@ -181,10 +248,14 @@ class ShopAccessibilityService : AccessibilityService() {
     fun startBot(startGold: Long, startSkystones: Int): String {
         if (!cfg.riskAccepted) return getString(R.string.toast_risk_required)
         generation.incrementAndGet()
-        stopBotInternal()
-        // 时序自适应：测量本机"截图 + 识别一帧"的真实耗时，供 framesFor() 换算帧预算。
-        // 必须在起线程前测（此时不会与机器人抢截图）。
-        measureFrameCost()
+        // ANR 修复（高危）：旧线程 join(3000) 与帧成本实测（两次截图，每次最多 5s，
+        // 外加完整 OCR）原先都在**主线程**同步执行，最坏十几秒不返回。这段代码由
+        // 按钮点击触发，而触摸事件 5 秒内得不到处理就会触发 ANR（系统弹「应用无响应」）。
+        // 现在主线程只做「发状态 + 释放锁 + 打断旧线程」这些毫秒级操作。
+        //
+        // 安全性：旧线程即使尚未退出也**无法再操作设备** —— 所有点击都经过 ClickGate，
+        // 它首先检查 stopRequested()，而 generation 已经变了 → 一律 DENY。
+        val previous = detachBotThread()
         // 新一轮开始：清除上一轮的"任务完成"标记，避免影响本轮的自动熄屏判断
         sessionCompleted = false
         // 保持屏幕常亮：熄屏会让无障碍截图拿不到画面，机器人随即停摆
@@ -196,8 +267,7 @@ class ShopAccessibilityService : AccessibilityService() {
                 "goldCap=${cfg.goldSpendCap} skyBudget=${cfg.maxSkystones} log=${cfg.logLevel} " +
                 "screen=${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}"
         )
-        // 清空会话残留
-        handledRows.clear()
+        // 会话残留（handledRows）不在这里清 —— 见下面 bot 线程开头的说明
         publish {
             it.running = true
             it.paused = false
@@ -216,6 +286,18 @@ class ShopAccessibilityService : AccessibilityService() {
         // 事件日志：每次 start = 全新会话，清空上一轮时间线（环形缓冲与去重游标都在控制器里）
         floaty.resetEventLog(getString(R.string.float_log_started))
         botThread = Thread({
+            // ① 等旧线程收尾（最多 1.5s）：它已收到 interrupt，且阶段内的长等待
+            //    现在每轮都检查停止标志，通常几十毫秒就退出
+            joinQuietly(previous, 1500)
+            // ①b 清空会话残留：**必须在 bot 线程做**（2026-09-18 修复）。
+            //     放在主线程时，它与旧线程的 handledAdd/handledContains 并发 —— 即使
+            //     集合本身线程安全，旧线程也仍可能把上一轮的行号补回来（逻辑竞态）。
+            //     等旧线程 join 之后清，语义才确定：新会话从零开始。
+            handledRows.clear()
+            // ② 实测帧成本：必须在进入引擎循环前完成。否则 framesFor() 会先用回退值
+            //    900ms 换算帧数，慢设备上 20 秒预算会被算成 70 秒以上（等待反而暴涨）。
+            //    放在 bot 线程而不是主线程，正是本次 ANR 修复的核心。
+            measureFrameCost()
             // 点击逻辑双模式：AI = 独立闭环（YOLO 眼睛 + AI 决策，绝不回退传统）；
             // traditional = 已验证的文本锚点流程。两条管线完全独立。
             if (cfg.clickLogic == "ai") {
@@ -256,25 +338,58 @@ class ShopAccessibilityService : AccessibilityService() {
     fun stopBot() {
         val wasRunning = state.running
         generation.incrementAndGet()
-        stopBotInternal()
+        // 非阻塞停止：引擎在阶段内的长等待每轮都检查 stopRequested，会在几十~几百毫秒内
+        // 自行退出；在主线程 join(3000) 会让"点停止"这个动作本身卡住 3 秒（同样是 ANR 风险）。
+        detachBotThread()
         if (wasRunning) logEvent(getString(R.string.float_log_finished))
     }
 
-    private fun stopBotInternal() {
+    /**
+     * 非阻塞停止：发状态、释放常亮锁、打断旧线程，但**不 join**，返回旧线程句柄。
+     *
+     * 为什么不在调用方 join：调用方是主线程（按钮点击 / 悬浮窗回调）。旧线程可能正处在
+     * 阶段内部的长等待（例如 12 秒的弹窗轮询），join(3000) 会让主线程干等 3 秒；
+     * 再叠上帧成本测量的两次截图就是十几秒 —— 触摸事件分发超时 → ANR。
+     * 改为把线程句柄交给新线程去 join（见 startBot 里的 joinQuietly）。
+     *
+     * 正确性：被打断的旧线程即使还没退出也点不动屏幕（ClickGate 首查 stopRequested，
+     * 而 generation 已经变了），因此新线程可以安全启动。
+     */
+    private fun detachBotThread(): Thread? {
         publish { it.running = false; it.paused = false }
         // 停止即释放屏幕常亮锁（这里是所有停止路径的公共出口，放这里最稳妥）
         releaseRunWakeLock()
-        botThread?.let { t ->
-            try {
-                t.interrupt()
-            } catch (e: Exception) {
-                // 线程已结束或不可中断：join 仍会兜底，这里不必中断停止流程
-                android.util.Log.w("E7SA.State", "bot thread interrupt failed: " + e.message)
-            }
-            try { t.join(3000) } catch (e: InterruptedException) { Thread.currentThread().interrupt() }
+        val t = botThread
+        try {
+            t?.interrupt()
+        } catch (e: Exception) {
+            // 线程已结束或不可中断：join 仍会兜底，这里不必中断停止流程
+            android.util.Log.w("E7SA.State", "bot thread interrupt failed: " + e.message)
         }
         botThread = null
         publish { it.stage = Stage.IDLE }
+        return t
+    }
+
+    /** 安静地等待线程结束（吞掉中断异常并恢复中断标志）。 */
+    private fun joinQuietly(t: Thread?, maxMs: Long) {
+        if (t == null) return
+        try {
+            t.join(maxMs)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    /**
+     * 阻塞式停止（**仅 onDestroy 使用**）：等旧线程真正退出后才返回。
+     *
+     * 服务即将销毁时必须用这个版本 —— 引擎线程持有 Service 引用（resources / assets），
+     * 在 Service 失效后继续访问会崩。此时不在用户交互路径上，短暂等待不会触发 ANR。
+     */
+    private fun stopBotInternal() {
+        val t = detachBotThread() ?: return
+        joinQuietly(t, 3000)
     }
 
     /** 单帧真实成本（截图 + 识别），由 [measureFrameCost] 实测；0 = 未测出。 */
@@ -482,11 +597,48 @@ class ShopAccessibilityService : AccessibilityService() {
             //  · E7SA.Percep / 其余诊断类         → 详细级，detail 以上才写
             val required = when {
                 tag == "E7SA.Buy" || tag == "E7SA.Row" || tag == "E7SA.Gate" -> "normal"
+                // 引擎异常终止属于关键事件：任何日志级别都必须落盘，
+                // 否则"机器人为什么没跑起来"在 normal 级别下依然查不到（实测踩过）
+                tag == "E7SA.Crash" -> "normal"
                 tag == "E7SA.Percep" || tag == "E7SA.StateDiff" || tag == "E7SA.Wait" -> "detail"
+                // 候选过滤原因：漏买复盘的直接证据（"候选有却没买"要先能回答被谁丢了）
+                tag == "E7SA.Filt" -> "detail"
+                // 滑动到底的判定留痕：事后核对"滑了几次、凭什么判定到底"（漏买安全审查）
+                tag == "E7SA.Scroll" -> "detail"
+                // 自愈动作（发 BACK 关闭拦截输入的对话框）属于关键事件，任何级别都要留
+                tag == "E7SA.Recover" -> "normal"
+                // 会话级量化汇总：seen / bought / dropHandledRow 的对账结果，任何级别都要留
+                tag == "E7SA.Summary" -> "normal"
                 tag == "E7SA.AI" || tag == "E7SA.State" -> "detail"
                 else -> "debug"
             }
             runLog.write(tag, msg, required)
+            // 购买 / 候选过滤 / 会话汇总同时写入**不参与轮转**的持久文件：
+            // 这几类是"这一晚买到了什么、漏了什么"的举证材料，必须比会话日志活得久
+            if (tag == "E7SA.Buy" || tag == "E7SA.Filt" ||
+                tag == "E7SA.Row" || tag == "E7SA.Summary"
+            ) {
+                runLog.critical(tag, msg)
+            }
+        }
+
+        /**
+         * 帧级感知追踪：写入识别层的**原始输出**（OCR 全文 / YOLO 框 / 候选生成）。
+         *
+         * 级别固定为 detail：它信息量最大、体积也最大（8 小时挂机约 2~6MB），
+         * 只在玩家主动开详细日志时才写，避免默认情况下把存储写满。
+         */
+        override fun traceFrame(stage: String, r: com.e7.shop.bot.DetectionResult) {
+            runLog.write("E7SA.Percep", com.e7.shop.bot.formatPerceptionTrace(stage, r), "detail")
+        }
+
+        /** 自愈用：发一次系统返回键（关闭拦截输入的模态对话框）。 */
+        override fun pressBack() {
+            try {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            } catch (e: Exception) {
+                android.util.Log.w("E7SA.Recover", "pressBack failed: ${e.message}")
+            }
         }
     }
 

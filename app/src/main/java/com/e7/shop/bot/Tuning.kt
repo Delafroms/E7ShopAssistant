@@ -19,6 +19,20 @@ package com.e7.shop.bot
  */
 object Tuning {
 
+    /* ================= 商品价格与数量（游戏内固定值） ================= */
+
+    /**
+     * 誓约书签 / 神秘奖牌的单价（金币）与单次购买数量。
+     *
+     * 为什么集中：这三个值原先散落在 BotEngine.countPurchase、AiBotEngine.countPurchase
+     * 与 Recognition 的价格校验里（三处各写一遍字面量）。它们必须**永远一致** ——
+     * 统计用 184000 而校验用别的值时，"花了多少钱"与"是否买对商品"会同时判错。
+     */
+    const val BOOKMARK_PRICE = 184000L
+    const val MEDAL_PRICE = 280000L
+    const val BOOKMARK_PER_BUY = 5
+    const val MEDAL_PER_BUY = 50
+
     /* ================= 行结构（Recognition） ================= */
 
     /**
@@ -174,11 +188,29 @@ object Tuning {
     const val FRAMES_MIN = 4
     const val FRAMES_MAX = 40
 
-    /** 行级重试预算：同一行连续失败多少次后判定为硬失败（放弃该行并报告）。 */
-    const val MAX_ROW_ATTEMPTS = 2
+    /**
+     * 行级重试预算：同一行连续失败多少次后判定为硬失败（放弃该行并报告）。
+     *
+     * ⚠ 已于 2026-09-17 删除（玩家要求"宁可多试，绝不漏买"）：达到次数就永久放弃
+     * 会把"点击没生效"这种**可恢复**的失败变成漏买。当前实现只统计失败次数、
+     * 不做任何放弃（见 BotEngine.noteRowFailure）。
+     */
 
-    /** WAIT 阶段的超时哨兵（轮数，每轮约 600ms）。 */
-    const val WAIT_MAX_STREAK = 600
+    /**
+     * WAIT 阶段的探测间隔上限（ms）。
+     *
+     * ⚠ 这里**不再有"等够多久就停机"的哨兵**。玩家要求深夜挂机绝不主动放弃：
+     * 停机 = 剩下几个小时全部变成漏买，而神秘奖牌每次刷新只有约 1% 出现率，
+     * 错过就是错过。改为「等得越久、探测越稀疏」（600ms → 该上限）：
+     * 既省电、不刷屏，又能在画面一恢复时立刻继续买。
+     */
+    const val WAIT_BACKOFF_MAX_MS = 3000L
+
+    /**
+     * 未决退避上限（ms）：连续"无法确定下一步"时逐步拉长等待，但**绝不停止会话**。
+     * 与 [WAIT_BACKOFF_MAX_MS] 同理——宁可慢，不可停。
+     */
+    const val UNDECIDED_BACKOFF_MAX_MS = 8000L
 
     /** RECOVER 阶段的超时哨兵（轮数）。 */
     const val RECOVER_MAX_STREAK = 6
@@ -186,11 +218,42 @@ object Tuning {
     /** 滑动揭示 slot6 的最大尝试次数。 */
     const val SLOT6_MAX_ATTEMPTS = 4
 
-    /** 判定"滑到底"所需的连续"画面没动"次数。 */
-    const val SCROLL_STILL_STREAK = 2
+    /**
+     * 判定"滑到底"所需的连续"画面没动"次数。
+     *
+     * **2 → 1**（2026-09-18，玩家实测反馈"刷新后下滑三次，太浪费时间"）：
+     * 旧值 2 配合滑动循环会让每轮刷新固定滑 **3 次**
+     * （第 1 次滑动画面动、第 2 次没动 streak=1、第 3 次没动 streak=2 才判定到底）。
+     * 而商店固定 6 格、单次滑动跨度 0.72h 足以露出剩余格位，
+     * 因此**一次"没动"即可判定到底**，每轮省下约 0.6~1 秒。
+     *
+     * 安全兜底（玩家要求"强化单次下滑的安全审查"）：
+     *  · 判定到底后若仍识别出新目标，流程会重新处理该屏，不会漏买；
+     *  · 确认滑动使用更短的稳定等待（见各滑动循环），不牺牲判据可靠性。
+     */
+    const val SCROLL_STILL_STREAK = 1
 
     /** 判定"弹窗已关闭"所需的连续非弹窗帧数。 */
     const val DIALOG_CLOSED_STREAK = 2
+
+    /**
+     * 网络异常弹窗的连续重试上限（2026-09-19）。
+     *
+     * 超过就退避等待而不是继续点 —— 实测事故：关键词误命中导致无限重试，
+     * 每 0.75 秒点一次、位置还乱跳，**点到了系统控制中心和桌面**，把游戏推到后台。
+     * 网络真的不通时狂点也没有意义。
+     */
+    const val NET_RETRY_MAX_STREAK = 4
+
+    /**
+     * 死循环兜底：连续多少轮"进了决策但既没买也没刷新"就强制刷新一次。
+     *
+     * 2026-09-19 实测事故：买过的奖牌图标仍在屏上（按钮已售空），
+     * 而 revealSlot 无条件清空位置记忆 → 该行被反复当成目标 →
+     * 整夜在 REVEAL_SLOT ↔ DECIDE_TARGETS 之间打转、**一次都不刷新**。
+     * 根因已修（位置记忆改为"画面真动了才清"），这里留兜底防同类问题复发。
+     */
+    const val IDLE_DECIDE_MAX_STREAK = 5
 
     /** 截图连续失败多少次后放弃本屏（fail-closed，不刷新）。 */
     const val SHOT_FAIL_LIMIT = 3
@@ -206,6 +269,16 @@ object Tuning {
     /** 滑动后的随机等待区间（ms）。 */
     const val SWIPE_SETTLE_MIN_MS = 380
     const val SWIPE_SETTLE_MAX_MS = 640
+
+    /**
+     * **确认滑动**（判定"到底"的那一次）的稳定等待区间（ms）。
+     *
+     * 为什么比首次短：首次滑动后需要等画面真正稳定才能识别内容；
+     * 而确认滑动只回答"画面变没变"这一个问题，短等待足够，
+     * 每轮省下约 0.2~0.3 秒（一晚 600+ 轮就是几分钟）。
+     */
+    const val SWIPE_CONFIRM_SETTLE_MIN_MS = 220
+    const val SWIPE_CONFIRM_SETTLE_MAX_MS = 340
 
     /** 行去重容差（画面短边占比）及其夹取区间（px）。 */
     const val HANDLED_ROW_TOL_RATIO = 0.07f

@@ -147,8 +147,10 @@ int PPOCRv5::load(const char* det_parampath, const char* det_modelpath, const ch
     ppocrv5_det.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    ppocrv5_det.load_param(det_parampath);
-    ppocrv5_det.load_model(det_modelpath);
+    int ret = ppocrv5_det.load_param(det_parampath);
+    if (ret != 0) return ret;
+    ret = ppocrv5_det.load_model(det_modelpath);
+    if (ret != 0) return ret;
 
     // default to 1 thread, as we rec multiple lines in parallel
     ppocrv5_rec.opt.num_threads = 1;
@@ -161,8 +163,10 @@ int PPOCRv5::load(const char* det_parampath, const char* det_modelpath, const ch
     ppocrv5_rec.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    ppocrv5_rec.load_param(rec_parampath);
-    ppocrv5_rec.load_model(rec_modelpath);
+    ret = ppocrv5_rec.load_param(rec_parampath);
+    if (ret != 0) return ret;
+    ret = ppocrv5_rec.load_model(rec_modelpath);
+    if (ret != 0) return ret;
 
     return 0;
 }
@@ -181,8 +185,13 @@ int PPOCRv5::load(AAssetManager* mgr, const char* det_parampath, const char* det
     ppocrv5_det.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    ppocrv5_det.load_param(mgr, det_parampath);
-    ppocrv5_det.load_model(mgr, det_modelpath);
+    // 返回值必须透出（2026-09-18 修复）：旧版丢弃返回值且恒 return 0，
+    // 于是 e7ocr.cpp 里的 "load failed" 分支是死代码 —— 模型缺失/损坏时
+    // 照样上报 loaded=true，表现为"识别 0 结果但日志说模型是好的"。
+    int ret = ppocrv5_det.load_param(mgr, det_parampath);
+    if (ret != 0) return ret;
+    ret = ppocrv5_det.load_model(mgr, det_modelpath);
+    if (ret != 0) return ret;
 
     // default to 1 thread, as we rec multiple lines in parallel
     ppocrv5_rec.opt.num_threads = 1;
@@ -195,8 +204,10 @@ int PPOCRv5::load(AAssetManager* mgr, const char* det_parampath, const char* det
     ppocrv5_rec.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    ppocrv5_rec.load_param(mgr, rec_parampath);
-    ppocrv5_rec.load_model(mgr, rec_modelpath);
+    ret = ppocrv5_rec.load_param(mgr, rec_parampath);
+    if (ret != 0) return ret;
+    ret = ppocrv5_rec.load_model(mgr, rec_modelpath);
+    if (ret != 0) return ret;
 
     return 0;
 }

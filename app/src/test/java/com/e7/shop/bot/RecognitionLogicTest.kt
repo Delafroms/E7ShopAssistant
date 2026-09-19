@@ -78,6 +78,45 @@ class RecognitionLogicTest {
         assertEquals(Scene.BUY_DLG, sceneOf(lines))
     }
 
+    /* ========== 场景判定：并列证据（2026-09-18 漏买修复） ========== */
+
+    @Test
+    fun shop_list_is_detected_even_without_refresh_button() {
+        // 漏买修复：商店列表原先**只认「立即更新」**。该按钮被遮挡、滚出画面或
+        // OCR 漏读时，整屏会被判成 OTHER → 决策层 WAIT → 识别到的奖牌也不会被买。
+        // 现在「商品名 + 购买键」是并列证据。
+        val lines = listOf(
+            line("神秘奖牌", 1500f, 620f),
+            line("购买", 1600f, 620f),
+            line("280000", 1700f, 620f)
+        )
+        assertEquals(Scene.SHOP_LIST, sceneOf(lines))
+    }
+
+    @Test
+    fun app_ui_with_item_name_is_not_mistaken_for_shop() {
+        // 反向保护：App 自身界面的统计区也写着"神秘奖牌"，但**没有购买键**，
+        // 绝不能判成商店列表 —— 否则机器人会在自己的界面上乱点（误买）。
+        val lines = listOf(
+            line("神秘奖牌", 700f, 1400f),
+            line("书签", 900f, 1400f),
+            line("刷新次数", 700f, 1300f)
+        )
+        assertEquals(Scene.OTHER, sceneOf(lines))
+    }
+
+    @Test
+    fun buy_dialog_still_wins_over_item_name_evidence() {
+        // 弹窗判定必须优先：弹窗里同样有商品名，不能被"商品名 + 购买键"抢走
+        val lines = listOf(
+            line("购买商品", 1400f, 500f),
+            line("神秘奖牌", 1400f, 600f),
+            line("购买", 1600f, 900f),
+            line("取消", 1200f, 900f)
+        )
+        assertEquals(Scene.BUY_DLG, sceneOf(lines))
+    }
+
     @Test
     fun shop_list_is_detected() {
         val lines = listOf(

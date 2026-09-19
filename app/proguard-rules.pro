@@ -9,6 +9,11 @@
 -keep class com.e7.shop.bot.PpOcr { *; }
 -keep class com.e7.shop.bot.YoloDet { *; }
 
+# ---- Shizuku provider：清单里声明了，但类名来自第三方库。
+#      R8 曾把它当无用代码删掉（usage.txt 有记录）→ Shizuku 通道静默失效 ----
+-keep class rikka.shizuku.ShizukuProvider { *; }
+-keep class rikka.shizuku.Shizuku { *; }
+
 # ---- OkHttp / coroutines used by the WebDAV sync ----
 -keep class okhttp3.** { *; }
 -dontwarn okhttp3.**

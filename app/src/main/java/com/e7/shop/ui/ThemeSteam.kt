@@ -349,7 +349,7 @@ private fun StHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
     var showShot by remember { mutableStateOf(false) }
     var logoVersion by remember { mutableStateOf(0) }
     val logoBmp = remember(logoVersion) { loadLogoBitmap(context, cfg) }
-    val bgBmp = remember { loadBgBitmap(context, cfg) }
+    val bgBmp = remember(cfg.bgImage) { loadBgBitmap(context, cfg) }
     // 预取字符串（供非 Composable lambda 使用）
     val diagRawText = stringResource(R.string.diag_raw_capture)
     val diagBenchText = stringResource(R.string.diag_benchmark_done)

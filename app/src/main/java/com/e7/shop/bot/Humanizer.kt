@@ -25,6 +25,24 @@ class Humanizer(private val cfg: AppConfig) {
     private fun effDelay(ms: Long): Long =
         (ms.toDouble() / cfg.speedMult * (1.0 + fatigue)).toLong().coerceAtLeast(50)
 
+    /**
+     * 可被 stopBot 打断的等待（2026-09-18 修复）。
+     *
+     * 旧版这里直接 `Thread.sleep`，不吞 InterruptedException —— stopBot 打断线程时
+     * 异常会一路冒泡到引擎的 `catch (Exception)`，被记成
+     * `E7SA.Crash engine aborted: InterruptedException` 并把 `lastError` 设成"异常"。
+     * 后果：**正常停止被当成崩溃**，玩家第二天看到"出错了"，无法判断这一晚到底有没有真故障。
+     * 现在与 DeviceIo.sleepMs 行为一致：恢复中断标志后安静返回，由上层循环的
+     * stopRequested() 判定退出（各阶段的长等待每轮都会检查它）。
+     */
+    private fun sleepQuietly(ms: Long) {
+        try {
+            Thread.sleep(ms)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
     fun randInt(min: Int, max: Int): Int =
         if (max <= min) min else Random.nextInt(min, max + 1)
 
@@ -33,7 +51,7 @@ class Humanizer(private val cfg: AppConfig) {
 
     /** Random wait between actions (human eye + reaction time). */
     fun delay() {
-        Thread.sleep(effDelay(randInt(cfg.delayMinMs, cfg.delayMaxMs).toLong()))
+        sleepQuietly(effDelay(randInt(cfg.delayMinMs, cfg.delayMaxMs).toLong()))
     }
 
     /**
@@ -42,7 +60,7 @@ class Humanizer(private val cfg: AppConfig) {
      * action added up to seconds of dead time per round.
      */
     fun hesitate() {
-        Thread.sleep(effDelay(randInt(180, 520).toLong()))
+        sleepQuietly(effDelay(randInt(180, 520).toLong()))
     }
 
     /** Random rest every N operations, like a human taking a break. */
@@ -53,14 +71,14 @@ class Humanizer(private val cfg: AppConfig) {
             // 旧版 `(fatigue * 2).toLong()` 在 fatigue < 0.5 时恒为 0（疲劳上限 0.4），
             // 这个加成从未生效过 —— 改为浮点缩放。
             val base = randInt(1200, 4200).toLong()
-            Thread.sleep(effDelay((base * (1.0 + fatigue * 2.0)).toLong()))
+            sleepQuietly(effDelay((base * (1.0 + fatigue * 2.0)).toLong()))
         }
     }
 
     /** Small probability of a longer daze. */
     fun maybeDaze() {
         if (Random.nextFloat() < 0.05f + fatigue * 0.10f) {
-            Thread.sleep(effDelay(randInt(900, 2600).toLong()))
+            sleepQuietly(effDelay(randInt(900, 2600).toLong()))
         }
     }
 

@@ -1,4 +1,4 @@
-﻿// Tencent is pleased to support the open source community by making ncnn available.
+// Tencent is pleased to support the open source community by making ncnn available.
 //
 // Copyright (C) 2024 THL A29 Limited, a Tencent company. All rights reserved.
 //
@@ -16,7 +16,8 @@
 
 YOLOv8::~YOLOv8()
 {
-    det_target_size = 320;
+    // 原实现在这里给 det_target_size 赋初值（显然是笔误：析构里赋值毫无意义）。
+    // 默认值已移到头文件的成员初始化器，见 yolov8.h。
 }
 
 int YOLOv8::load(const char* parampath, const char* modelpath, bool use_gpu)
@@ -30,8 +31,10 @@ int YOLOv8::load(const char* parampath, const char* modelpath, bool use_gpu)
     yolov8.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    yolov8.load_param(parampath);
-    yolov8.load_model(modelpath);
+    int ret = yolov8.load_param(parampath);
+    if (ret != 0) return ret;
+    ret = yolov8.load_model(modelpath);
+    if (ret != 0) return ret;
 
     return 0;
 }
@@ -47,8 +50,12 @@ int YOLOv8::load(AAssetManager* mgr, const char* parampath, const char* modelpat
     yolov8.opt.use_vulkan_compute = use_gpu;
 #endif
 
-    yolov8.load_param(mgr, parampath);
-    yolov8.load_model(mgr, modelpath);
+    // 返回值必须透出（2026-09-18 修复）：旧版恒 return 0，导致 JNI 层的失败分支
+    // 是死代码 —— 模型缺失/损坏时照样上报 loaded=true，表现为"识别 0 结果但日志说模型好"。
+    int ret = yolov8.load_param(mgr, parampath);
+    if (ret != 0) return ret;
+    ret = yolov8.load_model(mgr, modelpath);
+    if (ret != 0) return ret;
 
     return 0;
 }

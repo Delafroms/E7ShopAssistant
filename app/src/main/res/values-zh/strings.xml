@@ -63,9 +63,10 @@
     <string name="sky_budget">天空石预算上限（0=不限）</string>
     <string name="cap_bookmark">书签持有上限（达到此数量即停，0=不限）</string>
     <string name="cap_medal">神秘奖牌持有上限（达到此数量即停，0=不限）</string>
-    <string name="gold_spend_cap">金币消耗上限（刷新花费超过即停，0=关闭）</string>
+    <string name="gold_spend_cap">金币消耗上限（达到即停，购买与刷新都会停；0=关闭）\n建议：设为当前金币余额 − 30 万以上；每轮挂机前按当时余额重设。</string>
     <string name="sleep_mode">睡眠模式（完整识别，更慢但最稳）</string>
     <string name="auto_lock_on_done">预算用完后自动熄屏</string>
+    <string name="acc_exempt">无障碍保活豁免（只影响本应用）</string>
     <string name="speed_mult">运行速度倍数 1-3（越快循环越快，收益相同）</string>
     <string name="ocr_engine">识图引擎</string>
     <string name="appearance_dark">Steam · 深色卡片</string>
@@ -183,6 +184,7 @@
     <string name="toast_risk_required">风险警告未确认，无法运行</string>
     <string name="toast_templates_required">图标模板尚未采集</string>
     <string name="err_sky_budget">已达到钻石消耗上限</string>
+    <string name="err_net_error">网络弹窗已处理，继续运行</string>
     <string name="err_gold_cap">金币消耗达到上限（已花费 %1$s），已停止</string>
     <string name="err_bookmark_cap">书签持有达到上限（%1$d 张），已停止</string>
     <string name="err_medal_cap">神秘奖牌持有达到上限（%1$d 个），已停止</string>
@@ -272,7 +274,10 @@
     <string name="err_swipe_shot">滑动检查：截图失败，重试中（不刷新）</string>
     <string name="err_row_buy_failed">行购买失败 x%1$d（%2$s@%3$d），已跳过该行</string>
     <string name="err_row_wrong_target">弹窗与目标不符（%1$s@%2$d）——点错了行，已放弃该行</string>
-    <string name="err_refresh_unverified">刷新未验证成功（商店列表无变化），不计数，重新观察</string>
+    <string name="err_refresh_unverified">刷新未验证成功（商店列表无变化），已记账但不下滑，重新观察</string>
+    <string name="err_refresh_shot">刷新前截图失败，重试中（不刷新）</string>
+    <string name="err_no_refresh_btn">未定位到「立即更新」按钮，重新观察</string>
+    <string name="err_refresh_dlg_timeout">点击刷新后未出现确认弹窗，重新观察</string>
     <string name="err_gate_bad_point">点击闸门拒绝：坐标非法（%1$d,%2$d）</string>
 
     <!-- Shizuku -->

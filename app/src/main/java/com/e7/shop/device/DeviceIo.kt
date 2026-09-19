@@ -90,8 +90,19 @@ class DeviceIo(
                 }
             }
         )
-        if (!latch.await(SCREENSHOT_TIMEOUT_SEC, TimeUnit.SECONDS)) {
-            Log.w(TAG, "takeScreenshot timed out after $SCREENSHOT_TIMEOUT_SEC s")
+        try {
+            if (!latch.await(SCREENSHOT_TIMEOUT_SEC, TimeUnit.SECONDS)) {
+                Log.w(TAG, "takeScreenshot timed out after $SCREENSHOT_TIMEOUT_SEC s")
+            }
+        } catch (e: InterruptedException) {
+            // 停止时的**正常**中断（2026-09-19 修复）。
+            // 旧版不吞中断：InterruptedException 会一路冒泡到引擎的 catch (Exception)，
+            // 被记成 "E7SA.Crash engine aborted: InterruptedException" + err=异常
+            //（实测日志 01:33:33）—— 把玩家手动点停止记成了崩溃。
+            // 这里恢复中断标志并 fail-closed 返回 null，让上层循环靠 stopRequested() 干净退出。
+            Thread.currentThread().interrupt()
+            Log.i(TAG, "takeScreenshot interrupted (stop requested)")
+            return null
         }
         return out
     }

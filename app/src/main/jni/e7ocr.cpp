@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <mutex>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -20,6 +21,9 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
 static PPOCRv5* g_ocr = 0;
+// 保护"加载"这一段：装备评分页每次进入都会调 nativeLoad，而机器人线程可能正在
+// g_ocr 上跑推理。旧版无条件 delete 再 new → use-after-free → SIGSEGV（Kotlin 捕不到）。
+static std::mutex g_ocr_mutex;
 
 // OpenMP dispatch symbols for opencv's parallel.cpp (simpleomp doesn't
 // provide them). With cv::setNumThreads(1) opencv runs loops inline and
@@ -108,28 +112,38 @@ JNIEXPORT jboolean JNICALL Java_com_e7_shop_bot_PpOcr_nativeLoad(JNIEnv* env, jo
         return JNI_FALSE;
     }
 
-    if (g_ocr)
+    std::lock_guard<std::mutex> lock(g_ocr_mutex);
+
+    // 幂等：已经加载过就直接返回，**绝不 delete**。
+    // 旧版每次 nativeLoad 都 delete g_ocr 再 new —— 而 EquipmentScoreActivity 每次
+    // 进入页面都会调 PpOcr.load()，此时机器人线程可能正在 g_ocr 上执行
+    // detect_and_recognize → 释放正在使用的对象 → SIGSEGV（native 崩溃，Kotlin
+    // 的 try/catch 捕不到，进程直接死）。
+    if (g_ocr != 0)
     {
-        delete g_ocr;
-        g_ocr = 0;
+        LOGI("nativeLoad: already loaded, skip reload");
+        return JNI_TRUE;
     }
 
-    g_ocr = new PPOCRv5;
+    PPOCRv5* inst = new PPOCRv5;
     // mobile models, fp16 (mobile is fp16-safe), CPU only (small models are
     // faster on CPU than GPU - ncnn README).
-    int ret = g_ocr->load(mgr,
+    int ret = inst->load(mgr,
         "PP_OCRv5_mobile_det.ncnn.param", "PP_OCRv5_mobile_det.ncnn.bin",
         "PP_OCRv5_mobile_rec.ncnn.param", "PP_OCRv5_mobile_rec.ncnn.bin",
         true, false);
 
     if (ret != 0)
     {
+        // load() 现在会返回真实的失败码（旧版恒返回 0，这个分支是死代码）
         LOGE("nativeLoad: load failed ret=%d", ret);
-        delete g_ocr;
-        g_ocr = 0;
+        delete inst;
         return JNI_FALSE;
     }
 
+    // 发布点：只有**加载完成**的对象才会被其他线程看到，
+    // 避免"指针已非空但模型还没就绪"时另一个线程在上面跑推理。
+    g_ocr = inst;
     LOGI("nativeLoad: PP-OCRv5 mobile loaded OK");
     return JNI_TRUE;
 }

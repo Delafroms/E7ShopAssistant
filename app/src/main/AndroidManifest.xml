@@ -20,7 +20,10 @@
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
     <application
+        android:name=".E7App"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -68,6 +71,20 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="shop automation keep-alive while the player farms" />
         </service>
+
+        <!-- Shizuku 通道（可选快捷授权）：**必须由 App 自己声明** ——
+             dev.rikka.shizuku:provider 的 AAR 清单里并没有这个 provider（只带一个 meta-data），
+             官方文档明确要求在 App 清单中声明。
+             缺了它的实测后果：Shizuku.pingBinder() 恒为 false → 通道二永远不可用，
+             而且 R8 会把这个类当无用代码删掉（usage.txt 里能查到）。
+             android:permission 用 INTERACT_ACROSS_USERS_FULL，防止普通应用访问该 provider。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
     </application>
 </manifest>

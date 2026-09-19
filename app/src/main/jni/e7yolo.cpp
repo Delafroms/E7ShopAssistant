@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <mutex>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -19,6 +20,8 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
 static YOLOv8* g_yolo = 0;
+// 与 e7ocr.cpp 同理：加载必须串行且幂等，绝不 delete 正在被推理使用的对象。
+static std::mutex g_yolo_mutex;
 
 extern "C" {
 
@@ -32,18 +35,29 @@ JNIEXPORT jboolean JNICALL Java_com_e7_shop_bot_YoloDet_nativeLoad(JNIEnv* env, 
     AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
     if (mgr == 0) { LOGE("nativeLoad: AAssetManager null"); return JNI_FALSE; }
 
-    if (g_yolo) { delete g_yolo; g_yolo = 0; }
+    std::lock_guard<std::mutex> lock(g_yolo_mutex);
 
-    g_yolo = new YOLOv8_det_coco;
-    int ret = g_yolo->load(mgr, "e7sa_yolo.ncnn.param", "e7sa_yolo.ncnn.bin", false);
+    // 幂等：已加载直接返回，绝不 delete（机器人线程可能正在 g_yolo 上推理）
+    if (g_yolo != 0)
+    {
+        LOGI("nativeLoad: already loaded, skip reload");
+        return JNI_TRUE;
+    }
+
+    YOLOv8_det_coco* inst = new YOLOv8_det_coco;
+    int ret = inst->load(mgr, "e7sa_yolo.ncnn.param", "e7sa_yolo.ncnn.bin", false);
     if (ret != 0)
     {
+        // load() 现在返回真实的失败码（旧版恒返回 0 → 这里曾是死代码，
+        // 模型缺失时依然上报 loaded=true，现象是"识别 0 结果但日志说模型是好的"）
         LOGE("nativeLoad: load failed ret=%d", ret);
-        delete g_yolo; g_yolo = 0;
+        delete inst;
         return JNI_FALSE;
     }
     const int tsize = (targetSize > 0) ? (int)targetSize : 640;
-    g_yolo->set_det_target_size(tsize);
+    // 必须先设好尺寸再发布指针：否则另一个线程可能拿到未设尺寸的实例
+    inst->set_det_target_size(tsize);
+    g_yolo = inst;
     LOGI("nativeLoad: YOLOv8 detector loaded OK (target_size=%d)", tsize);
     return JNI_TRUE;
 }

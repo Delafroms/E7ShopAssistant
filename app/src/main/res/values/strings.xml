@@ -63,9 +63,10 @@
     <string name="sky_budget">Sky budget limit (0 = unlimited)</string>
     <string name="cap_bookmark">Bookmark holding cap (stop at this count, 0 = unlimited)</string>
     <string name="cap_medal">Medal holding cap (stop at this count, 0 = unlimited)</string>
-    <string name="gold_spend_cap">Gold spend cap (stop refreshing above, 0 = off)</string>
+    <string name="gold_spend_cap">Gold spend cap (stop when reached; also stops buying, 0 = off)\nTip: set it at least 300k below your current gold, and reset it before each run.</string>
     <string name="sleep_mode">Sleep mode (full recognition, slower but safest)</string>
     <string name="auto_lock_on_done">Lock screen when budget reached</string>
+    <string name="acc_exempt">Accessibility keep-alive exemption (this app only)</string>
     <string name="speed_mult">Speed multiplier 1-3x (faster cycles, same rewards)</string>
     <string name="ocr_engine">Recognition engine</string>
     <string name="ocr_engine_yolo">YOLO Vision</string>
@@ -185,6 +186,7 @@
     <string name="toast_risk_required">Risk warning not confirmed - cannot run</string>
     <string name="toast_templates_required">Icon templates not captured yet</string>
     <string name="err_sky_budget">Skystone budget reached</string>
+    <string name="err_net_error">Network dialog handled — continuing</string>
     <string name="err_gold_cap">Gold spend cap reached (%1$s spent) - stopped</string>
     <string name="err_bookmark_cap">Bookmark holding cap reached (%1$d bookmarks) - stopped</string>
     <string name="err_medal_cap">Medal holding cap reached (%1$d medals) - stopped</string>
@@ -273,7 +275,10 @@
     <string name="err_swipe_shot">Swipe check: screenshot failed - retrying (no refresh)</string>
     <string name="err_row_buy_failed">Row purchase failed x%1$d (%2$s@%3$d) - skipping this row</string>
     <string name="err_row_wrong_target">Dialog does not match target (%1$s@%2$d) - tapped the wrong row, giving up this row</string>
-    <string name="err_refresh_unverified">Refresh not verified (shop list unchanged) - not counting, will re-observe</string>
+    <string name="err_refresh_unverified">Refresh not verified (shop list unchanged) - counted but not scrolling, will re-observe</string>
+    <string name="err_refresh_shot">Screenshot before refresh failed - retrying (no refresh)</string>
+    <string name="err_no_refresh_btn">Refresh button not located - will re-observe</string>
+    <string name="err_refresh_dlg_timeout">No confirm dialog after tapping refresh - will re-observe</string>
     <string name="err_gate_bad_point">Click gate denied: invalid tap point (%1$d,%2$d)</string>
 
     <!-- Shizuku -->

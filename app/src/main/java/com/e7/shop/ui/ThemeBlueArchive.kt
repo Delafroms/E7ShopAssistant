@@ -384,6 +384,9 @@ private fun BaHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
     val context = LocalContext.current
     val startText = stringResource(R.string.start)
     val restartText = stringResource(R.string.restart_btn)
+    // 风险确认闸门（2026-09-18 修复）：旧版 BA 主题完全没有这道闸门 ——
+    // 未确认风险时 startBot 会直接返回提示串而**什么都不做**，按钮表现为"点了没反应"。
+    var showRisk by remember { mutableStateOf(false) }
     // 诊断入口（与 Steam 主题功能对等）：点击版本号 = 抓图 / 长按 = 识别基准
     val version = remember {
         try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" }
@@ -696,9 +699,13 @@ private fun BaHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
                     onClick = {
                         val svc = ShopAccessibilityService.instance
                         if (svc == null) {
+                            toast(context, svcMissingText)
                             context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        } else if (!cfg.riskAccepted) {
+                            showRisk = true
                         } else {
-                            svc.startBot(0, 0)
+                            val msg = svc.startBot(0, 0)
+                            toast(context, if (msg == "ok") context.getString(R.string.toast_started) else msg)
                         }
                     },
                     modifier = Modifier.weight(2f),
@@ -730,6 +737,30 @@ private fun BaHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
                 }
             }
         }
+    }
+
+    // 风险确认弹窗：与 Steam 主题同一份文案、同一道闸门。
+    // 确认后立即启动 —— 玩家点"开始"的意图不该被弹窗打断成"再点一次"。
+    if (showRisk) {
+        AlertDialog(
+            onDismissRequest = { showRisk = false },
+            title = { Text(stringResource(R.string.dlg_risk_title)) },
+            text = { Text(stringResource(R.string.dlg_risk_msg)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    cfg.riskAccepted = true
+                    showRisk = false
+                    val svc = ShopAccessibilityService.instance
+                    if (svc != null) {
+                        val msg = svc.startBot(0, 0)
+                        toast(context, if (msg == "ok") context.getString(R.string.toast_started) else msg)
+                    }
+                }) { Text(stringResource(R.string.dlg_accept_risk)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRisk = false }) { Text(stringResource(R.string.dlg_cancel)) }
+            }
+        )
     }
 }
 

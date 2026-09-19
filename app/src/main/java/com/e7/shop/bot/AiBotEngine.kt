@@ -29,7 +29,10 @@ class AiBotEngine(
 
     private enum class Phase {
         OBSERVE, DECIDE_TARGETS, VERIFY_DIALOG, CONFIRM_PURCHASE, VERIFY_CLOSED,
-        REVEAL_SLOT, CLICK_REFRESH, CONFIRM_REFRESH, RECOVER, WAIT, DONE
+        REVEAL_SLOT, CLICK_REFRESH, CONFIRM_REFRESH, RECOVER, WAIT,
+        /** 网络异常弹窗：点「点击重试」后回到正常流程（2026-09-19 新增）。 */
+        RETRY_NET,
+        DONE
     }
 
     private var phase = Phase.OBSERVE
@@ -45,6 +48,16 @@ class AiBotEngine(
     private var dbgCount = 0
     private var session: RecordStore.Session? = null
 
+    /* ---- 会话级感知统计：与 BotEngine 同口径，两条管线的日志才能横向对比 ---- */
+    private var seenCandidates = 0
+    private var droppedByHandledRow = 0
+
+    /** 连续多少轮"进了决策但既没买也没刷新"——死循环兜底，见 decideTargets。 */
+    private var idleDecideStreak = 0
+
+    /** 网络异常弹窗连续重试次数（见 retryNet）。 */
+    private var netRetryStreak = 0
+
     /** A3 店铺状态跟踪器（观测层）：只记录状态变迁供诊断，不参与任何决策。 */
     private val stateTracker = ShopStateTracker()
 
@@ -55,6 +68,13 @@ class AiBotEngine(
             host.finish()
             return
         }
+        // ⚠ 假开关修复（2026-09-18，玩家实测"开不开睡眠模式都一样"）：
+        // 本管线的视觉引擎是硬编码的 YoloEngine()，而 sleepMode 只在
+        // ShopAccessibilityService.engineForRun() 里注入 —— 那条路径只有传统引擎走。
+        // 结果：AI 点击管线下睡眠模式**从未生效**，开关形同虚设。
+        // 现在在会话启动时按配置注入，与 BotEngine 行为对齐。
+        vision.sleepMode = host.cfg.sleepMode
+        host.log("E7SA.AI", "vision sleepMode=${vision.sleepMode} (engine=${vision.id})")
         session = RecordStore.Session(
             startTime = System.currentTimeMillis(),
             startGold = startGold,
@@ -85,13 +105,25 @@ class AiBotEngine(
                     Phase.CONFIRM_REFRESH -> confirmRefresh()
                     Phase.RECOVER -> recover()
                     Phase.WAIT -> waitGame()
+                    Phase.RETRY_NET -> retryNet()
                     Phase.DONE -> return
                 }
             }
         } catch (e: Exception) {
-            host.setError(host.str(R.string.err_exception, e.message ?: ""))
+            // 与 BotEngine 同因修复：`!!` 抛出的 NPE message 为 null，
+            // 只记 message 会让日志变成空的「异常：」，无法定位。
+            host.log("E7SA.Crash", "ai engine aborted: ${e.javaClass.name}: ${e.message}")
+            host.log("E7SA.Crash", e.stackTraceToString().lineSequence().take(6).joinToString(" | "))
+            host.setError(host.str(R.string.err_exception, "${e.javaClass.simpleName}: ${e.message ?: "(no message)"}"))
         } finally {
             session!!.endTime = System.currentTimeMillis()
+            // 会话级量化汇总：与 BotEngine 同格式（见其 finally 里的判读说明）
+            host.log(
+                "E7SA.Summary",
+                "ai seen=$seenCandidates bought=${session!!.bookmarksGot + session!!.medalsGot} " +
+                    "refreshes=${session!!.refreshes} sky=${session!!.skystonesSpent} " +
+                    "gold=${session!!.goldSpent} dropHandledRow=$droppedByHandledRow"
+            )
             host.commitSession(session!!)
             host.finish()
         }
@@ -102,6 +134,12 @@ class AiBotEngine(
     private fun shot(): Pair<Bitmap, DetectionResult>? {
         val b = host.screenshot() ?: return null
         val r = vision.analyze(b)
+        // 帧级感知追踪：与 BotEngine 同策略（有候选必记、无候选采样）。
+        // 两条管线的日志格式必须一致，否则复盘时无法横向对比。
+        dbgCount++
+        if (r.candidates.isNotEmpty() || dbgCount % 5 == 0) {
+            host.traceFrame("FRAME", r)
+        }
         return b to r
     }
 
@@ -127,13 +165,33 @@ class AiBotEngine(
     private fun kindEnabled(kind: String): Boolean =
         if (kind == "bookmark") host.cfg.buyBookmark else host.cfg.buyMedal
 
+    /**
+     * 候选是否保留。丢弃时记录原因（与 BotEngine 同口径，便于两条管线横向对比）。
+     *
+     * `handled-row` 是漏买主因：下滑之后另一件商品会移到同一 y，
+     * 却仍被当成"已处理"而永久跳过。
+     */
+    private fun keepCandidate(c: Candidate): Boolean {
+        if (!kindEnabled(c.kind)) {
+            host.log("E7SA.Filt", "ai drop ${c.kind}@${c.rowY} reason=kind-disabled")
+            return false
+        }
+        if (host.handledContains(c.rowY)) {
+            droppedByHandledRow++
+            host.log("E7SA.Filt", "ai drop ${c.kind}@${c.rowY} reason=handled-row(该位置曾被处理)")
+            return false
+        }
+        return true
+    }
+
     private fun countPurchase(kind: String) {
+        // 价格与数量取自 Tuning 单一来源（与 BotEngine / Recognition 共用同一组常量）
         if (kind == "bookmark") {
-            s().bookmarksGot += 5
-            s().goldSpent += 184000L
+            s().bookmarksGot += Tuning.BOOKMARK_PER_BUY
+            s().goldSpent += Tuning.BOOKMARK_PRICE
         } else {
-            s().medalsGot += 50
-            s().goldSpent += 280000L
+            s().medalsGot += Tuning.MEDAL_PER_BUY
+            s().goldSpent += Tuning.MEDAL_PRICE
         }
         host.counters(s())
     }
@@ -156,12 +214,28 @@ class AiBotEngine(
         return false
     }
 
-    /** AI 无法确定下一步：明确报告，不猜测、不回退传统点击；连续多次则停止。 */
+    /**
+     * AI 无法确定下一步：明确记录，不猜测、不回退传统点击。
+     *
+     * ⚠ **不再停机**（玩家要求，2026-09-17）：旧版连续 8 次未决就 return DONE，
+     * 而深夜挂机时"停一次"= 剩下几小时全部漏买。改为退避继续观察 ——
+     * 等待随连续未决次数线性增长，画面一恢复立刻继续。
+     */
     private fun undecided(reason: String): Phase {
         undecidedStreak++
         host.setError(host.str(R.string.err_ai_undecided, reason))
-        if (undecidedStreak >= 8) return Phase.DONE
-        host.sleepMs(1200)
+        host.log("E7SA.AI", "undecided($undecidedStreak): $reason")
+        // ⚠ 自愈（2026-09-18 实测事故驱动）：连续多次"点击后毫无反应"通常**不是识别问题**，
+        // 而是有模态窗口在拦截输入 —— ColorOS 的"持续使用无障碍服务"确认框就是典型：
+        // 它不遮住画面、OCR 一切正常，却吃掉了整晚 567 次点击中的 565 次，
+        // 导致挂机 5 小时 25 分只成功刷新 2 次。
+        // 每 3 次未决发一次 BACK：这类系统对话框会被关闭，游戏本身通常不受影响。
+        if (undecidedStreak % 3 == 0) {
+            host.log("E7SA.Recover", "连续失败 x$undecidedStreak -> 发送 BACK 尝试关闭拦截输入的对话框")
+            host.pressBack()
+        }
+        val backoff = (1200L * undecidedStreak).coerceAtMost(Tuning.UNDECIDED_BACKOFF_MAX_MS)
+        host.sleepMs(backoff)
         return Phase.OBSERVE
     }
 
@@ -173,12 +247,15 @@ class AiBotEngine(
         val p = shot() ?: return Phase.WAIT
         host.setStage(Stage.CHECKING)
         val scene = p.second.scene
+        // 会话级感知统计：识别层这一帧"看见"了几个候选（漏买复盘的分子来源）
+        seenCandidates += p.second.candidates.size
         recycle(p.first)
         host.log("E7SA.AI", "scene=$scene")
         return when (scene) {
             Scene.SHOP_LIST -> {
                 waitStreak = 0
                 recoverStreak = 0
+                netRetryStreak = 0   // 画面正常了：清零网络重试计数
                 Phase.DECIDE_TARGETS
             }
             Scene.BUY_DLG -> {
@@ -189,8 +266,60 @@ class AiBotEngine(
                 host.setError(host.str(R.string.err_recover_refresh_dlg))
                 Phase.RECOVER
             }
+            Scene.NET_ERROR -> {
+                // 网络异常弹窗（2026-09-19）：点重试后回到 OBSERVE 继续正常流程
+                host.setError(host.str(R.string.err_net_error))
+                Phase.RETRY_NET
+            }
             Scene.OTHER -> Phase.WAIT
         }
+    }
+
+    /**
+     * 网络异常弹窗处理（2026-09-19 新增，依据用户实机截图）。
+     *
+     * 实测场景：网络抖动时游戏弹「网络连接异常，请重新连接。」+「点击重试」。
+     * 它是**盖在商店列表上的模态窗** —— 列表文字仍能被 OCR 读到，于是旧逻辑把整屏
+     * 当成正常 SHOP_LIST，卡在「「立即更新」按钮无法视觉确认（彩色占比 0.00）」
+     * 反复 undecided，整轮无法推进（实测日志 01:32:52）。
+     *
+     * 处理：优先点 OCR 读到的「点击重试」文字位置；读不到就点弹窗中心区域
+     * （用户明确要求"随便在位置上点击" —— 弹窗是模态的，点在它上面即可生效）。
+     * 点完等游戏重连，然后回 OBSERVE 继续正常流程。
+     */
+    private fun retryNet(): Phase {
+        // 连续重试上限（2026-09-19）：网络真的不通时狂点没有意义，
+        // 而且实测「每 0.75 秒点一次」会点到系统 UI（控制中心/桌面）把游戏推到后台。
+        if (++netRetryStreak > Tuning.NET_RETRY_MAX_STREAK) {
+            netRetryStreak = 0
+            host.log(
+                "E7SA.Recover",
+                "NET ERROR 连续 " + Tuning.NET_RETRY_MAX_STREAK + " 次未恢复 -> 退避等待"
+            )
+            host.sleepMs(Tuning.UNDECIDED_BACKOFF_MAX_MS)
+            return Phase.WAIT
+        }
+        host.setStage(Stage.WAITING)
+        var x = host.screenW / 2f
+        var y = host.screenH * 0.55f
+        var hit = "center"
+        val p = shot()
+        if (p != null) {
+            val line = p.second.lines.firstOrNull { hasAny(it.text, RETRY_KW) }
+            if (line != null) {
+                x = line.cx
+                y = line.cy
+                hit = "retry-text"
+            }
+            recycle(p.first)
+        }
+        host.log(
+            "E7SA.Recover",
+            "NET ERROR: 点击重试 tap=(" + x.toInt() + "," + y.toInt() + ") by=" + hit
+        )
+        host.guardedTap(x, y, "netRetry")
+        host.sleepMs(1500)
+        return Phase.OBSERVE
     }
 
     /**
@@ -221,11 +350,10 @@ class AiBotEngine(
         dbgCount++
         if (dbgCount % 3 == 0) host.log("E7SA.Percep", "engine=${snap.engine} scene=${snap.scene} ${snap.diag}")
         val bmp = p.first
-        val targets = snap.candidates
-            .filter { kindEnabled(it.kind) && !host.handledContains(it.rowY) }
+        val targets = snap.candidates.filter { c -> keepCandidate(c) }
         if (targets.isEmpty()) {
             recycle(bmp)
-            return Phase.REVEAL_SLOT
+            return idleExit("no-candidate")
         }
         val skipRows = ArrayList<Pair<Candidate, ClickPlanner.Button>>()
         for (t in targets) {
@@ -239,7 +367,8 @@ class AiBotEngine(
                     // （E1 路径由 modelButton 非空返回，色块路径由质心成功返回）。
                     // 先取出再使用，避免同一表达式里重复 !! 触发编译器警告。
                     val pt = loc.pt!!
-                    host.log("E7SA.AI", "buy ${t.kind} button=CLICKABLE tap=(${pt.first.toInt()},${pt.second.toInt()})")
+                    idleDecideStreak = 0
+                    host.log("E7SA.AI", "buy " + t.kind + " button=CLICKABLE tap=(" + pt.first.toInt() + "," + pt.second.toInt() + ")")
                     host.guardedTap(pt.first, pt.second, "aiRowBuy")
                     return Phase.VERIFY_DIALOG
                 }
@@ -249,6 +378,30 @@ class AiBotEngine(
         }
         recycle(bmp)
         if (skipRows.isNotEmpty()) confirmSkips(skipRows)
+        return idleExit("all-skipped")
+    }
+
+    /**
+     * 决策轮"什么都没做成"时的统一出口（死循环兜底，2026-09-19）。
+     *
+     * 背景：实测事故 —— 买过的商品图标仍留在屏上（按钮已变售空），
+     * `confirmSkips` 把它标记为"已跳过"，而 `revealSlot` 又无条件清空位置记忆，
+     * 于是它被反复当成目标，机器人整夜在 REVEAL_SLOT ↔ DECIDE_TARGETS 之间打转、
+     * **一次都不刷新**（日志：row medal GRAY -> GRAY (x2) -> skip 每 3.5 秒重复）。
+     *
+     * 根因已修（位置记忆改为"画面真动了才清"），这里再加一道兜底：
+     * 连续 [Tuning.IDLE_DECIDE_MAX_STREAK] 轮既没买也没刷新 → 强制刷新一次。
+     * 与商品类型无关：书签、奖牌、乃至"按钮读不到"的行都走同一条路径。
+     */
+    private fun idleExit(reason: String): Phase {
+        if (++idleDecideStreak >= Tuning.IDLE_DECIDE_MAX_STREAK) {
+            idleDecideStreak = 0
+            host.log(
+                "E7SA.AI",
+                "空转 x" + Tuning.IDLE_DECIDE_MAX_STREAK + " (" + reason + ") -> 强制刷新（打破死循环）"
+            )
+            return Phase.CLICK_REFRESH
+        }
         return Phase.REVEAL_SLOT
     }
 
@@ -277,6 +430,9 @@ class AiBotEngine(
             val st = planner.rowButtonState(p, r, t.cy, t.tol).state
             if (st == ClickPlanner.Button.GRAY || st == ClickPlanner.Button.NONE) {
                 host.handledAdd(t.rowY)
+                // 这条计入"被位置记忆跳过"：机制与 BotEngine 相同，
+                // 下滑后另一件商品移到同一 y 时同样会被误跳过
+                droppedByHandledRow++
                 host.log("E7SA.AI", "row ${t.kind} $first -> $st (x2) -> skip")
             } else {
                 host.log("E7SA.AI", "row ${t.kind} $first -> $st -> keep for next cycle")
@@ -338,10 +494,15 @@ class AiBotEngine(
                     return Phase.DECIDE_TARGETS
                 }
                 if (loc.state == ClickPlanner.Button.CLICKABLE) {
-                    // 按钮仍可点击但弹窗未出现：明确报告并结束当前目标，不循环点击
-                    host.handledAdd(t.rowY)
+                    // ⚠ 漏买修复（2026-09-18，对齐 BotEngine.kt:670-692）：
+                    // "行还在、按钮仍可购买"恰恰说明**这一次点击没有生效**
+                    // （坐标偏了 / 被遮挡 / ColorOS 模态框吃掉了点击），这一行依然值得买。
+                    // 旧版在这里 handledAdd(t.rowY) → 该行被永久跳过 = 整屏漏买
+                    // （玩家实测事故：567 次点击被模态框吃掉 565 次）。
+                    // 现在只报告、**不标记已处理**，目标保持未决交给下一轮 observe 重新决策
+                    // （绝不拿旧帧的坐标去点，避免点错行）。
                     recycle(p2)
-                    host.log("E7SA.AI", "no dialog, button still clickable -> report + skip")
+                    host.log("E7SA.AI", "no dialog, button still clickable -> RETRY (不放弃该行)")
                     return undecided("点击后未出现购买弹窗")
                 }
             }
@@ -384,39 +545,105 @@ class AiBotEngine(
         recycle(dlg.first)
         host.hesitate()
         host.log("E7SA.AI", "confirm tap=(${pt.first.toInt()},${pt.second.toInt()})")
-        host.guardedTap(pt.first, pt.second, "aiConfirm")
+        val tapped = host.guardedTap(pt.first, pt.second, "aiConfirm")
+        // ⚠ 二次修正（2026-09-19）：**点下「购买」不等于买到了**。
+        //
+        // 2026-09-18 那次把计数从"验证通过"提前到"点下即记"，解决的是"买到了却不计数"
+        // （少计 → 金币上限被超 → 继续烧钱）。但它引出了反方向的问题：
+        // 金币不足时游戏会弹一个错误提示窗，而那个窗**既不是商店列表、也不是购买弹窗**，
+        // 旧验证逻辑（"连续两帧不是 BUY_DLG 就算成功"）会把它当成"弹窗关掉了" →
+        // **误判购买成功**：日志写假的 OK、计数虚高一件（这就是"假阳性"）。
+        //
+        // 现在改为**按结果提交**：由 verifyClosed() 拿到正向证据（画面回到商店列表）
+        // 才计数；超时未确认时仍计数（保守：钱可能已经花了，宁可少花不可烧钱）。
+        if (tapped) {
+            host.log("E7SA.Buy", "PURCHASE TAP kind=" + target?.kind + " rowY=" + target?.rowY)
+        } else {
+            host.log("E7SA.Gate", "PURCHASE NOT COMMITTED: 购买点击被闸门拒绝（未花钱，不计数）")
+        }
         return Phase.VERIFY_CLOSED
     }
 
-    /** 购买完成验证：弹窗关闭（连续两次非 BUY_DLG）→ 计数。 */
+    /**
+     * 购买结果验证（2026-09-19 重写为三态）。
+     *
+     * 旧判据是「连续两帧不是 BUY_DLG 就算成功」—— 它把**任何**非购买弹窗都当成
+     * "弹窗关掉了"。金币不足时游戏弹的错误提示窗恰好满足这个条件，于是：
+     * 日志写下假的 OK（假阳性）、计数虚高一件，而玩家实际上什么都没买到。
+     *
+     * 现在要求**正向证据**：
+     *  · 回到商店列表（连续 [Tuning.DIALOG_CLOSED_STREAK] 帧）→ 提交计数 + 写 OK
+     *  · 出现其它弹窗（连续同样帧数，既非商店列表也非购买弹窗）→ 判**失败**：
+     *    不计数、不写 OK，并把该帧 OCR 原文写进日志（据此可加精确关键词）
+     *  · 超时仍未确认 → 仍计数（保守），但日志明确标注"未确认"
+     */
     private fun verifyClosed(): Phase {
-        var closed = 0
+        var shopStreak = 0
+        var oddStreak = 0
+        var lastOddText = ""
         for (i in 0 until host.framesFor(10000)) {
             host.sleepMs(host.randInt(400, 700).toLong())
             val p = shot() ?: continue
             val scene = p.second.scene
+            if (scene == Scene.OTHER) {
+                // 留下弹窗上的文字：这是后续加精确识别（比如"金币不足"）的唯一依据
+                lastOddText = p.second.lines.take(8)
+                    .joinToString("│") { it.text.replace('\n', ' ').trim() }
+            }
             recycle(p.first)
-            if (scene != Scene.BUY_DLG) {
-                closed++
-                if (closed >= 2) {
-                    target?.let { countPurchase(it.kind) }
-                    target?.let { host.handledAdd(it.rowY) }
-                    // 购买成功日志：与 DIALOG TIMEOUT / 各类失败日志对照，
-                    // 就能算出"尝试了多少次、成功了多少次"，直接暴露漏买率。
-                    host.log("E7SA.Buy", "OK kind=${target?.kind} rowY=${target?.rowY} " +
-                        "bookmarks=${s().bookmarksGot} medals=${s().medalsGot} " +
-                        "goldSpent=${s().goldSpent} skySpent=${s().skystonesSpent}")
-                    target = null
-                    undecidedStreak = 0
-                    opCount++
-                    host.rest(opCount)
-                    return Phase.DECIDE_TARGETS
+            when (scene) {
+                Scene.SHOP_LIST -> {
+                    shopStreak++
+                    oddStreak = 0
+                    if (shopStreak >= Tuning.DIALOG_CLOSED_STREAK) {
+                        target?.let { countPurchase(it.kind) }
+                        target?.let { host.handledAdd(it.rowY) }
+                        host.log(
+                            "E7SA.Buy",
+                            "PURCHASE COMMIT kind=" + target?.kind + " rowY=" + target?.rowY +
+                                " bookmarks=" + s().bookmarksGot + " medals=" + s().medalsGot +
+                                " goldSpent=" + s().goldSpent + " (正向证据：已回到商店列表)"
+                        )
+                        target = null
+                        undecidedStreak = 0
+                        opCount++
+                        host.rest(opCount)
+                        return Phase.DECIDE_TARGETS
+                    }
                 }
-            } else {
-                closed = 0
+                Scene.OTHER -> {
+                    oddStreak++
+                    shopStreak = 0
+                    if (oddStreak >= Tuning.DIALOG_CLOSED_STREAK) {
+                        // 明确的失败证据：没回到商店列表，出现的是别的弹窗。
+                        // 不计数（钱没花）、不写 OK；把弹窗文字留档。
+                        target?.let { host.handledAdd(it.rowY) }
+                        host.log(
+                            "E7SA.Buy",
+                            "PURCHASE FAILED kind=" + target?.kind + " rowY=" + target?.rowY +
+                                " reason=dialog-not-shop raw=[" + lastOddText + "]"
+                        )
+                        target = null
+                        // 交给 RECOVER 发 BACK 关掉这个弹窗（自愈路径已存在）
+                        return Phase.RECOVER
+                    }
+                }
+                else -> {
+                    shopStreak = 0
+                    oddStreak = 0
+                }
             }
         }
-        return undecided("购买弹窗未关闭")
+        // 超时：无法确认结果。保守起见仍然计数（钱可能已经花了），但日志明确标注未确认。
+        target?.let { countPurchase(it.kind) }
+        target?.let { host.handledAdd(it.rowY) }
+        host.log(
+            "E7SA.Buy",
+            "PURCHASE UNCONFIRMED kind=" + target?.kind + " rowY=" + target?.rowY +
+                " -> 保守计数（可能已买到）；日志里没有 OK 即表示未确认"
+        )
+        target = null
+        return undecided("购买结果未确认")
     }
 
     /* ---------------- 阶段：滑动与刷新 ---------------- */
@@ -428,17 +655,23 @@ class AiBotEngine(
         val h = host.screenH
         val xC = w * host.cfg.swipeCenterX
         var shotFails = 0
-        // 与 BotEngine.slot6Check 同一判据：连续 2 次"没动"才算到底。
+        // 与 BotEngine.slot6Check 同一判据：连续 [Tuning.SCROLL_STILL_STREAK] 次"没动"才算到底。
+        // （该值 2026-09-18 按玩家反馈由 2 改为 1 —— "刷新后下滑三次太浪费时间"。
+        //   注释此前仍写着"2 次"，与实际值不符，2026-09-19 一并更正。）
         // 旧逻辑 `if (moved) break` 让同一操作的下滑次数在 1~3 次之间随机（didScroll 阈值
         // 卡在临界值），且可能在列表尚未到底时就进入刷新 —— 改为"滑到不动"后行为确定。
         var stillStreak = 0
-        for (attempt in 0 until 4) {
+        var swipes = 0
+        // 次数上限收敛到 Tuning（2026-09-19）：这里原先写死 4，与 Tuning.SLOT6_MAX_ATTEMPTS
+        // 分家 —— 调"滑动次数"时只改了传统引擎，AI 管线完全不跟随。
+        for (attempt in 0 until Tuning.SLOT6_MAX_ATTEMPTS) {
             val before = host.screenshot()
             if (before == null) { shotFails++; host.sleepMs(800); continue }
             host.swipe(
                 xC, h * Tuning.SWIPE_LOW_Y, xC, h * Tuning.SWIPE_HIGH_Y,
                 if (attempt == 0) Tuning.SWIPE_FIRST_MS else Tuning.SWIPE_REPEAT_MS
             )
+            swipes++
             // 等画面稳定后再识别（滑动惯性/加载中不急着判断）
             val after = captureStableFrame(6)
             if (after == null) { shotFails++; recycle(before); continue }
@@ -446,14 +679,47 @@ class AiBotEngine(
             recycle(before)
             val snap = after.second
             recycle(after.first)
-            val targets = snap.candidates
-                .filter { kindEnabled(it.kind) && !host.handledContains(it.rowY) }
-            if (targets.isNotEmpty()) return Phase.DECIDE_TARGETS
+            // ⚠ 位置记忆只在**画面真的动了**之后才清空（2026-09-19 修正）。
+            //
+            // 旧版是无条件清空，与 confirmSkips() 的 handledAdd 互相打架，实测造成
+            // **死循环、永不刷新**（日志：row medal GRAY -> GRAY (x2) -> skip 每 3.5 秒重复）：
+            //   买过的奖牌图标还在屏上 → DECIDE_TARGETS 判出"灰按钮" → confirmSkips 标记已跳过
+            //   → 回到 REVEAL_SLOT → 这里无条件清空标记 → 又把它当目标 → 无限下滑。
+            //
+            // 而清空的本意是"滑动后内容变了、同一 y 已是另一件商品"（漏买修复）——
+            // 画面没动时这个前提不成立，位置记忆依然有效，清空反而制造了死循环。
+            if (moved) host.handledClear()
+            val targets = snap.candidates.filter { c -> keepCandidate(c) }
+            // 逐次留痕（2026-09-19）：AI 管线此前**完全不记录滑动次数** ——
+            // 日志里只有 phase=REVEAL_SLOT → phase=CLICK_REFRESH，中间滑了几次、
+            // 为什么停，一点痕迹都没有。而"滑得不够 = 第 6 格没露出 = 漏买"，
+            // 恰恰是最需要举证的一环（传统引擎早就有 E7SA.Scroll）。
+            host.log(
+                "E7SA.Scroll",
+                "ai swipe=" + swipes + " attempt=" + attempt + " moved=" + moved +
+                    " still=" + stillStreak + " targets=" + targets.size +
+                    " scene=" + snap.scene + " sleep=" + host.cfg.sleepMode
+            )
+            if (targets.isNotEmpty()) {
+                host.log("E7SA.Scroll", "ai slot6 revealed: swipes=" + swipes + " -> decide")
+                return Phase.DECIDE_TARGETS
+            }
             if (moved) { stillStreak = 0; continue }
             stillStreak++
-            if (stillStreak >= 2) break
+            if (stillStreak >= Tuning.SCROLL_STILL_STREAK) {
+                host.log("E7SA.Scroll", "ai bottom: swipes=" + swipes + " reason=still x" + stillStreak + " -> refresh")
+                break
+            }
         }
-        return if (shotFails >= 3) Phase.WAIT else Phase.CLICK_REFRESH
+        if (shotFails >= 3) {
+            host.log("E7SA.Scroll", "ai abort: swipes=" + swipes + " shotFails=" + shotFails + " -> wait")
+            return Phase.WAIT
+        }
+        if (swipes >= Tuning.SLOT6_MAX_ATTEMPTS) {
+            // 滑满上限仍未判"到底"：必须留痕，否则"这轮为什么没揭示第 6 格"无从查起
+            host.log("E7SA.Scroll", "ai bottom: swipes=" + swipes + " reason=attempt-limit -> refresh")
+        }
+        return Phase.CLICK_REFRESH
     }
 
     /** 刷新：AI 定位「立即更新」金色按钮并点击，等待刷新弹窗。 */
@@ -511,18 +777,44 @@ class AiBotEngine(
         recycle(dlg.first)
         host.hesitate()
         host.log("E7SA.AI", "refreshConfirm tap=(${pt.first.toInt()},${pt.second.toInt()})")
-        host.guardedTap(pt.first, pt.second, "aiRefreshConfirm")
+        val tapped = host.guardedTap(pt.first, pt.second, "aiRefreshConfirm")
         host.daze()
         opCount++
         host.rest(opCount)
-        // VERIFY → COMMIT（P2 + P4）：先确认新库存真的出现（指纹变化 + 稳定），
-        // 验证通过才清空已处理行并计数；未验证则不计数（fail-closed）。
-        val next = waitShopLoaded(refreshBeforeFp ?: "", "刷新后商店列表未就绪")
-        if (next == Phase.DECIDE_TARGETS) {
-            host.handledClear()
+        // ---- ACTION → COMMIT（2026-09-18 高危修复，与 BotEngine.doRefresh 对齐）----
+        // 确认按钮已经点下，天空石**已经花掉**：必须立刻记账，与验证结果无关。
+        //
+        // 旧版是「先验证、验证通过才记账」，而 waitShopLoaded 在三种情况下都不返回
+        // DECIDE_TARGETS：① 刷新前后指纹相同 ② 行数 < 5 ③ 18 秒预算耗尽。
+        // 其中①在整屏售罄时**恰恰是常态**（刷新前后文本都是"售罄"）→ skystonesSpent
+        // 永不增长 → maxSkystones 闸门永远触发不了 → 整夜无限刷新、无限烧天空石
+        // （付费货币），而日志里 skySpent 还是 0。
+        //
+        // 正确语义：动作发生即记账；「验证」只决定要不要按新列表继续决策、要不要清空
+        // 已处理行（否则旧列表当新列表会重复购买）。
+        if (tapped) {
             s().refreshes++
             s().skystonesSpent += 3
             host.counters(s())
+            // 记账时刻留痕（2026-09-19）：这是"钱已经花了"的唯一权威记录点。
+            // 旧版把记账挂在验证成功之后，日志里完全看不出记账时机 ——
+            // 而 P0（无限烧天空石）正是藏在这个时序里。用 E7SA.Buy 标签 →
+            // 同时落进不参与轮转的 e7sa_critical.log，可长期举证。
+            host.log(
+                "E7SA.Buy",
+                "REFRESH COMMIT refreshes=" + s().refreshes + " skySpent=" + s().skystonesSpent +
+                    " (确认已点下，记账与验证结果无关)"
+            )
+            // 刷新 = 有进展：清空空转计数（2026-09-19）。
+            // 否则安全网会被**正常**的"这一轮没东西可买"累积触发（实测 01:33:10 误触发过一次），
+            // 那样会跳过 revealSlot 的上滑，可能漏掉第 6 格。
+            idleDecideStreak = 0
+        } else {
+            host.log("E7SA.Gate", "REFRESH NOT COMMITTED: 确认点击被闸门拒绝（未花钱，不记账）")
+        }
+        val next = waitShopLoaded(refreshBeforeFp ?: "", "刷新后商店列表未就绪")
+        if (next == Phase.DECIDE_TARGETS) {
+            host.handledClear()
             undecidedStreak = 0
         }
         return next
@@ -643,8 +935,12 @@ class AiBotEngine(
     private fun recover(): Phase {
         recoverStreak++
         if (recoverStreak > 6) {
+            // ⚠ 不再停机（同 BotEngine.doRecover）：退避后重新尝试，绝不放弃会话
             host.setError(host.str(R.string.err_dialog_stuck))
-            return Phase.DONE
+            host.log("E7SA.AI", "recover streak=$recoverStreak -> backoff & retry (不停机)")
+            host.sleepMs(Tuning.UNDECIDED_BACKOFF_MAX_MS)
+            recoverStreak = 0
+            return Phase.OBSERVE
         }
         host.setStage(Stage.CHECKING)
         val p = shot() ?: return Phase.OBSERVE
@@ -664,15 +960,17 @@ class AiBotEngine(
         return Phase.OBSERVE
     }
 
-    /** WAIT：非商店画面（加载/切走），带超时哨兵。 */
+    /**
+     * WAIT：非商店画面（加载 / 玩家切走 / 过场）。
+     *
+     * ⚠ **不再超时停机**（玩家要求）：深夜挂机停一次 = 剩下几小时全部漏买。
+     * 改为一直等待，只把探测间隔逐步拉长（600ms → 上限），画面恢复即继续。
+     */
     private fun waitGame(): Phase {
         waitStreak++
-        if (waitStreak > 600) {
-            host.setError(host.str(R.string.err_wait_timeout))
-            return Phase.DONE
-        }
         host.setStage(Stage.WAITING)
-        host.sleepMs(600)
+        val backoff = (600L * (1 + waitStreak / 20)).coerceAtMost(Tuning.WAIT_BACKOFF_MAX_MS)
+        host.sleepMs(backoff)
         return Phase.OBSERVE
     }
 }

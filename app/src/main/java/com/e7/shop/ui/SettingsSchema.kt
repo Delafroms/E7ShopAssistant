@@ -59,7 +59,11 @@ object SettingsSchema {
                 SettingItem.Switch(R.string.sleep_mode, { cfg.sleepMode }, { cfg.sleepMode = it }),
                 // 预算用完（金币/天空石/持有量达上限）→ 自动熄屏省电，适合睡前挂机
                 SettingItem.Switch(R.string.auto_lock_on_done, { cfg.autoLockOnDone }, { cfg.autoLockOnDone = it }),
-                SettingItem.Number(R.string.speed_mult, { cfg.speedMult.toLong() }, { cfg.speedMult = it.toInt().coerceIn(1, 3) })
+                SettingItem.Number(R.string.speed_mult, { cfg.speedMult.toLong() }, { cfg.speedMult = it.toInt().coerceIn(1, 3) }),
+                // 无障碍保活豁免：授权本应用把自己写进系统的无障碍豁免名单。
+                // 之所以要做成**用户可见的开关**：旧版是在服务连接时静默改写系统设置，
+                // 玩家既不知道、也无法关闭 —— 属于"超出授权范围的静默行为"。
+                SettingItem.Switch(R.string.acc_exempt, { cfg.accExemptFromAutoOff }, { cfg.accExemptFromAutoOff = it })
             )
         ),
         SettingsSection(

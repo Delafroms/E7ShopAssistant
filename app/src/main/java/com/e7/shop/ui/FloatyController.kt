@@ -83,12 +83,49 @@ class FloatyController(
     /** 当前悬浮窗所渲染的主题（外观切换时检测变化 → 整体重建）。 */
     private var floatyAppearance = ""
 
+    /** 上次构建窗口时使用的户型（"rail"/"classic"），用于检测主题或户型变化并重建。 */
+    private var floatyLayoutUsed = ""
+
+    /**
+     * 户型选择：**跟随主题**（玩家要求"符合不同主题、房子架构完全不同"）。
+     *
+     *  · Blue Archive 明亮主题 → 侧栏轨道（竖条贴边、按钮在**顶部**）；
+     *  · Steam / OLED       → 经典胶囊（胶囊在上、按钮在**底部**）。
+     *
+     * 也允许用 [AppConfig.floatyLayout] 手动强制任一户型，便于对比两套布局。
+     */
+    private fun useRailLayout(): Boolean = when (cfg.floatyLayout) {
+        "rail" -> true
+        "classic" -> false
+        else -> cfg.appearance == "ba" || cfg.appearance == "bluearchive"
+    }
+
+    /** 当前实际使用的户型（用于检测配置变化并重建窗口）。 */
+    private fun layoutKey(): String = if (useRailLayout()) "rail" else "classic"
+
+    /**
+     * 侧栏轨道户型实例（null = 经典户型，走本类既有实现）。
+     *
+     * 为什么保留两套实现而不是一次性重写：经典户型已经在真机验证过，
+     * 重写它只会引入无谓的回归风险；新户型独立实现、独立验证，随时可切回。
+     */
+    private var railSkin: RailFloatySkin? = null
+
     /** 面板展开宽度计算所需的刘海安全区（构建时记录，供 [toggle] 复用）。 */
     private var deckSafeLeft = 0
     private var deckSafeRight = 0
 
     /** 事件日志环形缓冲（时间戳 + 文案，最多 [MAX_EVENT_LOG] 条，最新在尾）。 */
+    /**
+     * 事件日志（环形，仅保留最近 [MAX_EVENT_LOG] 条）。
+     *
+     * **跨线程访问**：机器人线程经 `onStageChanged` 写，主线程经 `pauseBot`/`stopBot`
+     * 也写，而面板刷新在主线程 `takeLast` 读。ArrayDeque 非线程安全 —— 不加锁时
+     * 主线程的读可能撞上机器人线程的写，抛 ConcurrentModificationException 崩掉 UI。
+     * 因此所有访问都必须在 [eventLogLock] 上同步。
+     */
     private val eventLog = ArrayDeque<String>()
+    private val eventLogLock = Any()
     private var lastLoggedStage: Stage? = null
     private var lastLoggedError = ""
     private var lastLoggedBm = -1
@@ -103,13 +140,15 @@ class FloatyController(
     fun logEvent(msg: String) {
         val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date())
-        if (eventLog.size >= MAX_EVENT_LOG) eventLog.removeFirst()
-        eventLog.addLast("$stamp  $msg")
+        synchronized(eventLogLock) {
+            if (eventLog.size >= MAX_EVENT_LOG) eventLog.removeFirst()
+            eventLog.addLast("$stamp  $msg")
+        }
     }
 
     /** 每次 start = 全新会话，清空上一轮时间线并重置去重游标。 */
     fun resetEventLog(startedText: String) {
-        eventLog.clear()
+        synchronized(eventLogLock) { eventLog.clear() }
         lastLoggedStage = null
         lastLoggedError = ""
         lastLoggedBm = -1
@@ -180,23 +219,10 @@ class FloatyController(
      * 悬浮窗结构规格：颜色之外还有真正的"户型"差异 ——
      * Steam 控制台（渐变横幅 / 蓝边 / 绿色运行键）、OLED 极简（平面色块 / 细边 / 等宽字）、
      * BA 学园（条纹 + 网点横幅 / 胶带角 / 粉彩点缀）。
+     *
+     * 注意：类型本体已提升到 FloatySkin.kt（同包 internal），
+     * 因为多套悬浮窗户型都要读它，而户型实现放在独立文件里。
      */
-    private data class FloatySpec(
-        val body: Int, val headerTop: Int, val headerBottom: Int, val edge: Int,
-        val text: Int, val sub: Int, val run: Int, val warn: Int,
-        val statColors: List<Int>,
-        val startC1: Int, val startC2: Int, val startText: Int,
-        val pauseC1: Int, val pauseC2: Int, val pauseText: Int,
-        val stopC1: Int, val stopC2: Int, val stopText: Int,
-        val cornerDp: Float,
-        val headerGradient: Boolean,
-        val headerStripes: Boolean,
-        val headerDots: Boolean,
-        val tapeCorners: Boolean,
-        val flatButtons: Boolean,
-        val logPrefix: String,
-        val mono: Boolean
-    )
 
     private fun floatySpec(): FloatySpec = when (cfg.appearance) {
         "ba", "bluearchive" -> FloatySpec(
@@ -301,13 +327,100 @@ class FloatyController(
             destroy()
             return
         }
-        // 主题联动：外观切换 → 整体重建悬浮窗（不是换色补丁）
-        if (floatyRoot == null || floatyAppearance != cfg.appearance) {
+        // 主题/户型联动：外观或户型切换 → 整体重建悬浮窗（不是换色补丁）
+        val wantLayout = layoutKey()
+        if (floatyRoot == null || floatyAppearance != cfg.appearance ||
+            floatyLayoutUsed != wantLayout
+        ) {
             destroy()
             floatyAppearance = cfg.appearance
+            floatyLayoutUsed = wantLayout
             show()
         }
         refreshContent()
+    }
+
+    /* ---------- 户型契约：交互回调与状态组装 ---------- */
+
+    /**
+     * 新户型的交互入口：skin 只报告意图，动作一律回到本类执行。
+     *
+     * 这样新户型不需要知道 Service / 状态机 / 配置的任何细节，
+     * 换布局时不可能误碰功能逻辑（契约见 ui/FloatySkin.kt）。
+     */
+    private val skinHost = object : FloatyHost {
+        override fun onStart() { onStart.invoke() }
+        override fun onTogglePause() { onTogglePause.invoke() }
+        override fun onStop() { onStop.invoke() }
+        override fun onToggleExpand() { toggle() }
+        override fun onDragBy(dx: Int, dy: Int) = moveBy(dx, dy)
+        override fun onDragEnd() { /* 位移已即时写回窗口参数，无需收尾 */ }
+    }
+
+    /**
+     * 增量移动悬浮窗（右缘锚定 → x 方向取反）。
+     *
+     * 与经典户型拖拽语义一致：**完全自由拖动、不做边界夹取**
+     * （玩家明确要求可拖到任意位置；拖出屏幕后可用长按/重开开关复位）。
+     */
+    private fun moveBy(dx: Int, dy: Int) {
+        val pp = floatyParams ?: return
+        val root = floatyRoot ?: return
+        pp.x -= dx
+        pp.y += dy
+        applyLayout(root, pp)
+    }
+
+    /**
+     * 组装渲染快照：**所有户型共用同一份数据**。
+     *
+     * 数据只在这里产生，户型无法各自"顺手改一下"—— 功能等价性因此有保障。
+     */
+    private fun buildState(
+        stageText: String,
+        timeTxt: String,
+        hasError: Boolean,
+        engineKey: String
+    ): FloatyState {
+        val yoloPicked = cfg.ocrEngine == "yolo"
+        val yoloLoaded = com.e7.shop.bot.YoloDet.loaded
+        val recent = synchronized(eventLogLock) { eventLog.takeLast(6) }
+        return FloatyState(
+            running = ctx.state.running,
+            paused = ctx.state.paused,
+            hasError = hasError,
+            stageText = stageText,
+            timeText = timeTxt,
+            engineShortText = ctx.getString(
+                if (engineKey == "yolo") R.string.float_engine_yolo else R.string.float_engine_trad
+            ),
+            engineLongText = ctx.getString(
+                if (engineKey == "yolo") R.string.ocr_engine_yolo else R.string.ocr_engine_traditional
+            ),
+            modelVisible = yoloPicked,
+            modelText = ctx.getString(if (yoloLoaded) R.string.float_model_ok else R.string.float_model_na),
+            modelOk = yoloLoaded,
+            shotText = if (ctx.state.shotOk) ctx.getString(R.string.float_shot_ok, ctx.state.shotCount)
+            else ctx.getString(R.string.float_shot_fail),
+            shotOk = ctx.state.shotOk,
+            errorText = ctx.state.lastError,
+            // 顺序必须与契约表一致：书签 / 奖牌 / 刷新 / 天空石 / 金币 / 时长
+            stats = listOf(
+                ctx.getString(R.string.float_lbl_bookmark) to ctx.state.bookmarksGot.toString(),
+                ctx.getString(R.string.float_lbl_medal) to ctx.state.medalsGot.toString(),
+                ctx.getString(R.string.float_lbl_refresh) to ctx.state.refreshes.toString(),
+                ctx.getString(R.string.float_lbl_sky) to ctx.state.skystonesSpent.toString(),
+                ctx.getString(R.string.float_lbl_gold) to RecordStore.fmtNum(ctx.state.goldSpent),
+                ctx.getString(R.string.float_lbl_time) to timeTxt
+            ),
+            events = recent,
+            pauseLabel = ctx.getString(
+                if (ctx.state.paused) R.string.resume_btn else R.string.float_pause
+            ),
+            startLabel = ctx.getString(R.string.float_start),
+            stopLabel = ctx.getString(R.string.float_stop),
+            expanded = deckOpen
+        )
     }
 
     /** 把 BotState / 事件日志渲染进胶囊与任务面板。 */
@@ -321,6 +434,13 @@ class FloatyController(
         val yoloPicked = cfg.ocrEngine == "yolo"
         val yoloLoaded = com.e7.shop.bot.YoloDet.loaded
         val engineKey = if (yoloPicked && yoloLoaded) "yolo" else "cv"
+
+        // 新户型：把**同一份状态快照**交给 skin 渲染。
+        // 经典户型继续走下面的既有逻辑（已验证代码，不做无谓改动）。
+        railSkin?.let { skin ->
+            skin.render(buildState(stageText, timeTxt, hasError, engineKey))
+            return
+        }
 
         // ---- 状态胶囊（收起态） ----
         capStatus?.text = stageText
@@ -377,7 +497,8 @@ class FloatyController(
                 tv.visibility = View.GONE
             }
         }
-        deckLog?.text = eventLog.takeLast(6).joinToString("\n") { spec.logPrefix + " " + it }
+        val recent = synchronized(eventLogLock) { eventLog.takeLast(6) }
+        deckLog?.text = recent.joinToString("\n") { spec.logPrefix + " " + it }
     }
 
     /* ---------- 背景绘制 ---------- */
@@ -500,12 +621,23 @@ class FloatyController(
             floatyRoot = root
             floatyParams = pp
 
-            buildCapsule(root, spec, cornerPx)
-            buildDeck(root, spec, cornerPx, pp, capW, ins[2], ins[3])
+            if (useRailLayout()) {
+                // 侧栏轨道户型：竖条贴右边收起，展开后**按钮在顶部**（见 RailFloatySkin）。
+                // 窗口宽度由户型决定：竖轨窄、展开态由 toggle() 切换成面板宽。
+                val skin = RailFloatySkin(ctx)
+                railSkin = skin
+                skin.build(root, spec, skinHost)
+                skin.setExpanded(false)
+                pp.width = skin.collapsedWidthPx()
+                applyLayout(root, pp)
+            } else {
+                railSkin = null
+                buildCapsule(root, spec, cornerPx)
+                buildDeck(root, spec, cornerPx, pp, capW, ins[2], ins[3])
+            }
 
             startTicker()
-            refreshContent()
-        } catch (e: Exception) {
+            refreshContent()        } catch (e: Exception) {
             // 悬浮窗失败不能影响机器人本体：记录后放弃显示
             Log.e(TAG, "floating panel failed to build", e)
         }
@@ -971,6 +1103,22 @@ class FloatyController(
 
     /** 展开/收起任务面板：窗口宽度在胶囊宽与面板宽之间切换（右缘锚定）。 */
     private fun toggle() {
+        // 新户型：内部可见性由 skin 自己决定，本类只切换窗口宽度并重渲染
+        railSkin?.let { skin ->
+            val root = floatyRoot ?: return
+            val pp = floatyParams ?: return
+            val show = !skin.expanded
+            deckOpen = show
+            skin.setExpanded(show)
+            pp.width = if (show) {
+                minOf(dp(320), (screenW() - dp(24)).coerceAtLeast(dp(230)))
+            } else {
+                skin.collapsedWidthPx()
+            }
+            applyLayout(root, pp)
+            refreshContent()
+            return
+        }
         val deck = deckView ?: return
         val root = floatyRoot ?: return
         val pp = floatyParams ?: return
@@ -1042,6 +1190,9 @@ class FloatyController(
         deckStage = null; deckTime = null; deckDot = null; deckEngine = null; deckModel = null
         deckShot = null; deckErr = null; deckLog = null; deckPause = null
         deckStatVals.clear()
+        // 新户型清理（幂等）：视图引用与监听器都交回 skin 释放
+        railSkin?.destroy()
+        railSkin = null
         deckOpen = false
         deckAnim = null
         floatyAppearance = ""

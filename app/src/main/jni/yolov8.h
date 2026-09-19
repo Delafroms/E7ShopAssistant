@@ -51,7 +51,10 @@ public:
 
 protected:
     ncnn::Net yolov8;
-    int det_target_size;
+    // 默认值必须在这里给：旧版没有构造函数，唯一的初始化却写在**析构函数**里
+    // （yolov8.cpp 的 YOLOv8::~YOLOv8(){ det_target_size = 320; }），
+    // 一旦调用顺序变化（set_det_target_size 之前就用）就是不确定值进 letterbox 运算。
+    int det_target_size = 320;
 };
 
 class YOLOv8_det : public YOLOv8
