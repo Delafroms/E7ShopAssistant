@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "optfix",
+    "timestamp":  "2026-09-19T00:24:01",
+    "engine":  "yolo",
+    "samples":  89,
+    "errors":  0,
+    "gtTotal":  111,
+    "detected":  111,
+    "falseCand":  1,
+    "recall":  1,
+    "avgMs":  643,
+    "medianMs":  658,
+    "p95Ms":  769,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  1,
+                        "avgMs":  643,
+                        "medianMs":  658,
+                        "p95Ms":  769
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  1,
+                        "falseCand":  0,
+                        "avgMs":  369,
+                        "medianMs":  395,
+                        "p95Ms":  462
+                    }
+                ],
+    "pass":  true
+}

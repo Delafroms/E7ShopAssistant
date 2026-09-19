@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "after-hardening",
+    "timestamp":  "2026-09-17T23:46:50",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  470,
+    "medianMs":  492,
+    "p95Ms":  542,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  470,
+                        "medianMs":  492,
+                        "p95Ms":  542
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  229,
+                        "medianMs":  264,
+                        "p95Ms":  311
+                    }
+                ],
+    "pass":  true
+}

@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "real-89",
+    "timestamp":  "2026-09-18T01:04:16",
+    "engine":  "yolo",
+    "samples":  89,
+    "errors":  0,
+    "gtTotal":  111,
+    "detected":  111,
+    "falseCand":  1,
+    "recall":  1,
+    "avgMs":  472,
+    "medianMs":  490,
+    "p95Ms":  557,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  1,
+                        "avgMs":  472,
+                        "medianMs":  490,
+                        "p95Ms":  557
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  1,
+                        "falseCand":  0,
+                        "avgMs":  290,
+                        "medianMs":  295,
+                        "p95Ms":  390
+                    }
+                ],
+    "pass":  true
+}

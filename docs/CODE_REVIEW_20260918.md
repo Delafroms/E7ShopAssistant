@@ -112,7 +112,7 @@
 - 外部私有目录可涨到 GB 级无总量上限（RunLog 30×15MB + critical 4MB×2 + raw_capture 30 张 + benchmark）
 - `POST_NOTIFICATIONS` 在清单里声明，但代码中**零处申请**（真机 `granted=false`）→ Android 13+ 上保活通知在通知栏不可见，用户看不到"机器人在跑"
 - `accessibility_service_config.xml` 未设 `packageNames`，服务订阅所有应用的 windowStateChanged（`onAccessibilityEvent` 是空实现）——**注意：好消息是从未声明 `canRetrieveWindowContent`，全仓库 0 处 `rootInActiveWindow`/`AccessibilityNodeInfo`，确实不读控件树，能力是最小化的**
-- **release APK 用 Android 调试密钥库签名**（apksigner 验证：CN=Android Debug, O=Android, C=US），私钥是本机共用的 `C:\Users\ADMIN\.android\debug.keystore`，口令公开为 `android`。分发给群友的场景下，任何人拿到该文件即可签出**被系统当作合法升级接受**的包。好消息：keystore 已在 `.gitignore`、仓库里没有它，也没进备份
+- **release APK 用 Android 调试密钥库签名**（apksigner 验证：CN=Android Debug, O=Android, C=US），私钥是本机共用的调试密钥库（口令为公开的默认值 `android`）。分发给群友的场景下，任何人拿到该文件即可签出**被系统当作合法升级接受**的包。好消息：keystore 已在 `.gitignore`、仓库里没有它，也没进备份
 - 无障碍服务未重写 `onUnbind`，`isEnabled()` 可能失真
 
 **native / JNI 层（1248 行，主审逐文件读过）**

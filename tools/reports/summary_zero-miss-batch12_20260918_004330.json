@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "zero-miss-batch12",
+    "timestamp":  "2026-09-18T00:43:30",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  461,
+    "medianMs":  490,
+    "p95Ms":  520,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  461,
+                        "medianMs":  490,
+                        "p95Ms":  520
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  255,
+                        "medianMs":  289,
+                        "p95Ms":  319
+                    }
+                ],
+    "pass":  true
+}
