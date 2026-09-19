@@ -284,4 +284,72 @@ object Tuning {
     const val HANDLED_ROW_TOL_RATIO = 0.07f
     const val HANDLED_ROW_TOL_MIN_PX = 24
     const val HANDLED_ROW_TOL_MAX_PX = 220
+
+    /* ================= 时序（等待 / 停顿，ms） =================
+     *
+     * 为什么集中（2026-09-19）：这 20 个值原先以裸字面量形式散落在 BotEngine 与
+     * AiBotEngine 里（同一个 500 在两个文件各写一遍，改一处漏一处），
+     * 既看不出语义，也无法判断"两处 800 是巧合还是必须一致"。
+     * 现在每个值有名字和出处；**改这里等于改行为**，改完要真机跑一轮看日志。
+     *
+     * 命名：*_MS 是等待时长；*_MIN_MS/_MAX_MS 是随机区间（拟人化抖动）。
+     */
+
+    /** 暂停时轮询"是否已恢复"的间隔（两个引擎同值，必须一致）。 */
+    const val POLL_PAUSED_MS = 500L
+
+    /** 网络错误重试前的等待（给网络一次恢复机会，同时避免疯狂重连）。 */
+    const val NET_RETRY_WAIT_MS = 1500L
+
+    /** 通用轮询 tick（刷新等待、弹窗轮询等长循环里的单步等待）。 */
+    const val POLL_TICK_MS = 450L
+
+    /** "弹窗没出现"之后再确认一眼的间隔（区分"没弹"与"弹得慢"）。 */
+    const val DIALOG_RECHECK_MS = 600L
+
+    /** 截图失败后的重试间隔（fail-closed 路径：重试而不推进流程）。 */
+    const val RESHOT_RETRY_MS = 800L
+
+    /** 漏检保护：等待画面稳定后重查同一屏的等待（传统引擎）。 */
+    const val RESCAN_SETTLE_MS = 800L
+
+    /** 回收上一帧 Bitmap 之后的稳定等待（给系统回收内存的时间）。 */
+    const val SETTLE_AFTER_RECYCLE_MS = 700L
+
+    /** 点击「确认/购买」前的随机等待（拟人化：不固定节奏）。 */
+    const val PRE_TAP_JITTER_MIN_MS = 220
+    const val PRE_TAP_JITTER_MAX_MS = 400
+
+    /** 等待购买弹窗出现时的轮询区间。 */
+    const val DIALOG_POLL_MIN_MS = 350
+    const val DIALOG_POLL_MAX_MS = 600
+
+    /** 弹窗三重验证前的补等待（等渐显动画结束，避免拿过渡帧判定）。 */
+    const val DIALOG_SETTLE_MIN_MS = 220
+    const val DIALOG_SETTLE_MAX_MS = 360
+
+    /** 等待刷新完成（画面变化 + 稳定）时的轮询区间。 */
+    const val REFRESH_POLL_MIN_MS = 400
+    const val REFRESH_POLL_MAX_MS = 700
+
+    /** 等待商店列表加载完成时的轮询区间。 */
+    const val SHOP_LOAD_POLL_MIN_MS = 200
+    const val SHOP_LOAD_POLL_MAX_MS = 350
+
+    /** 滑动看第 6 格 / 兜底尝试时的轮询区间。 */
+    const val SLOT6_POLL_MIN_MS = 350
+    const val SLOT6_POLL_MAX_MS = 550
+
+    /** 传统引擎：复核一行并回收旧帧之后的稳定等待（宁可多花一帧，也不拿坏帧放弃可买的行）。 */
+    const val RECHECK_SETTLE_MIN_MS = 250
+    const val RECHECK_SETTLE_MAX_MS = 450
+
+    /**
+     * 传统引擎：**收紧后**的主循环轮询区间（200~380ms）。
+     *
+     * 为什么比别的轮询短：识别本身已占约 0.64s，sleep 再叠 0.5s 会让每帧逼近 1.2s；
+     * 收紧后每帧约 0.9s。这是实测调过的值，不要和 [POLL_TICK_MS] 混用。
+     */
+    const val POLL_TIGHT_MIN_MS = 200
+    const val POLL_TIGHT_MAX_MS = 380
 }

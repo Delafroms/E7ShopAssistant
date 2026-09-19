@@ -1,6 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// 正式签名（2026-09-19）：从 keystore.properties 读取（该文件不入版本库）。
+// 找不到时退回"不签名"，保证别人 clone 下来仍能构建（只是产物未签名）。
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 
 android {
@@ -11,7 +20,9 @@ android {
         applicationId = "com.e7.shop"
         minSdk = 30
         targetSdk = 36
-        versionCode = 15
+        // 2026-09-19：15 → 16。原因：①换了正式签名密钥，这是新一系（旧 debug 系无法覆盖升级）；
+        // ②此前多轮构建共用 15，出问题时无法从版本号分辨用户装的是哪一版（群友反馈的痛点）。
+        versionCode = 16
         versionName = "1.0"
 
         ndk {
@@ -48,6 +59,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                    storePassword = keystoreProps.getProperty("storePassword")
+                    keyAlias = keystoreProps.getProperty("keyAlias")
+                    keyPassword = keystoreProps.getProperty("keyPassword")
+                }
+            }
         }
     }
     compileOptions {

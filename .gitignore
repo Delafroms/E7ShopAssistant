@@ -41,6 +41,12 @@ __pycache__/
 *.pyc
 *.pyo
 
+# ===== 正式签名密钥与口令（2026-09-19）=====
+# 绝不入库：密钥只在本机 + 用户自己的备份里
+keystore.properties
+keystore/
+*.jks
+
 # ===== 系统 =====
 Thumbs.db
 Desktop.ini

@@ -90,7 +90,7 @@ class AiBotEngine(
                 )
                 if (host.isPaused()) {
                     host.setStage(Stage.PAUSED)
-                    host.sleepMs(500)
+                    host.sleepMs(Tuning.POLL_PAUSED_MS)
                     continue
                 }
                 host.log("E7SA.AI", "phase=${phase.name}")
@@ -318,7 +318,7 @@ class AiBotEngine(
             "NET ERROR: 点击重试 tap=(" + x.toInt() + "," + y.toInt() + ") by=" + hit
         )
         host.guardedTap(x, y, "netRetry")
-        host.sleepMs(1500)
+        host.sleepMs(Tuning.NET_RETRY_WAIT_MS)
         return Phase.OBSERVE
     }
 
@@ -414,7 +414,7 @@ class AiBotEngine(
      * 复核后变回可点的行保持未处理，交给下一轮 observe 重新决策（绝不拿旧帧的坐标去点）。
      */
     private fun confirmSkips(rows: List<Pair<Candidate, ClickPlanner.Button>>) {
-        host.sleepMs(host.randInt(220, 400).toLong())
+        host.sleepMs(host.randInt(Tuning.PRE_TAP_JITTER_MIN_MS, Tuning.PRE_TAP_JITTER_MAX_MS).toLong())
         val p = host.screenshot()
         if (p == null) {
             host.log("E7SA.AI", "A4 re-observe FAILED -> keep ${rows.size} row(s) for next cycle")
@@ -449,7 +449,7 @@ class AiBotEngine(
         // 弹窗等待 6 秒 → 12 秒：网络慢时弹窗可能 8~10 秒才出现，旧预算会让代码
         // 误判"没弹窗"→ 该买未买 → 继续刷新白烧天空石（玩家怀疑的漏买路径）。
         for (i in 0 until host.framesFor(12000)) {
-            host.sleepMs(host.randInt(350, 600).toLong())
+            host.sleepMs(host.randInt(Tuning.DIALOG_POLL_MIN_MS, Tuning.DIALOG_POLL_MAX_MS).toLong())
             val p = shot()
             if (p != null && p.second.scene == Scene.BUY_DLG) { dlg = p; break }
             if (p != null) recycle(p.first)
@@ -462,7 +462,7 @@ class AiBotEngine(
             // A4 观测优先：弹窗刚出现时可能还在渐显动画里（内容未完全呈现），
             // 直接拿它做三重验证会失败 → 取消 → 重买（玩家实测到的"点了取消又重新买"）。
             // 这里补一个短等待并重新取帧，确保验证用的是稳定帧。
-            host.sleepMs(host.randInt(220, 360).toLong())
+            host.sleepMs(host.randInt(Tuning.DIALOG_SETTLE_MIN_MS, Tuning.DIALOG_SETTLE_MAX_MS).toLong())
             val stable = shot()
             if (stable != null && stable.second.scene == Scene.BUY_DLG) {
                 recycle(dlg.first)
@@ -474,7 +474,7 @@ class AiBotEngine(
             return Phase.CONFIRM_PURCHASE
         }
         // 弹窗未出现：再看一眼当前行，判断是"售空/灰按钮"还是"无法确认"
-        host.sleepMs(600)
+        host.sleepMs(Tuning.DIALOG_RECHECK_MS)
         val p2 = host.screenshot()
         if (p2 != null) {
             val r2 = vision.analyze(p2)
@@ -582,7 +582,7 @@ class AiBotEngine(
         var oddStreak = 0
         var lastOddText = ""
         for (i in 0 until host.framesFor(10000)) {
-            host.sleepMs(host.randInt(400, 700).toLong())
+            host.sleepMs(host.randInt(Tuning.REFRESH_POLL_MIN_MS, Tuning.REFRESH_POLL_MAX_MS).toLong())
             val p = shot() ?: continue
             val scene = p.second.scene
             if (scene == Scene.OTHER) {
@@ -666,7 +666,7 @@ class AiBotEngine(
         // 分家 —— 调"滑动次数"时只改了传统引擎，AI 管线完全不跟随。
         for (attempt in 0 until Tuning.SLOT6_MAX_ATTEMPTS) {
             val before = host.screenshot()
-            if (before == null) { shotFails++; host.sleepMs(800); continue }
+            if (before == null) { shotFails++; host.sleepMs(Tuning.RESHOT_RETRY_MS); continue }
             host.swipe(
                 xC, h * Tuning.SWIPE_LOW_Y, xC, h * Tuning.SWIPE_HIGH_Y,
                 if (attempt == 0) Tuning.SWIPE_FIRST_MS else Tuning.SWIPE_REPEAT_MS
@@ -748,7 +748,7 @@ class AiBotEngine(
         var dlg: Pair<Bitmap, DetectionResult>? = null
         // 刷新弹窗同样 6 秒 → 12 秒：网络慢时弹窗会晚到
         for (i in 0 until host.framesFor(12000)) {
-            host.sleepMs(450)
+            host.sleepMs(Tuning.POLL_TICK_MS)
             val p2 = shot()
             if (p2 != null && p2.second.scene == Scene.REFRESH_DLG) { dlg = p2; break }
             if (p2 != null) recycle(p2.first)
@@ -843,7 +843,7 @@ class AiBotEngine(
         var rowsStable = 0
         // 时序自适应：按时间预算换算帧数（慢设备自动多给帧、快设备自动收紧）
         for (i in 0 until host.framesFor(18000)) {
-            host.sleepMs(host.randInt(200, 350).toLong())
+            host.sleepMs(host.randInt(Tuning.SHOP_LOAD_POLL_MIN_MS, Tuning.SHOP_LOAD_POLL_MAX_MS).toLong())
             val p = host.screenshot() ?: continue
             val r = vision.analyze(p)
             val fp = frameFingerprint(r)
@@ -888,7 +888,7 @@ class AiBotEngine(
         var stable = 0
         var lastBmp: Bitmap? = null
         for (i in 0 until attempts) {
-            host.sleepMs(host.randInt(350, 550).toLong())
+            host.sleepMs(host.randInt(Tuning.SLOT6_POLL_MIN_MS, Tuning.SLOT6_POLL_MAX_MS).toLong())
             val p = host.screenshot() ?: continue
             // 轻量探测：只为"画面是否还在动"服务，不需要 OCR
             engine_hasIconFast(p)
@@ -956,7 +956,7 @@ class AiBotEngine(
             host.guardedTap(pt.first, pt.second, "aiCancel")
         }
         recycle(p.first)
-        host.sleepMs(700)
+        host.sleepMs(Tuning.SETTLE_AFTER_RECYCLE_MS)
         return Phase.OBSERVE
     }
 

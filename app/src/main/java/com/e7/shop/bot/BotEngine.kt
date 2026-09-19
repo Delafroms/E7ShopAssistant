@@ -146,7 +146,7 @@ class BotEngine(
                 )
                 if (host.isPaused()) {
                     host.setStage(Stage.PAUSED)
-                    host.sleepMs(500)
+                    host.sleepMs(Tuning.POLL_PAUSED_MS)
                     continue
                 }
                 host.log("E7SA.State", "phase=${phase.name}")
@@ -329,7 +329,7 @@ class BotEngine(
             "NET ERROR: 点击重试 tap=(" + x.toInt() + "," + y.toInt() + ") by=" + hit
         )
         guardedTap(x, y, "netRetry")
-        host.sleepMs(1500)
+        host.sleepMs(Tuning.NET_RETRY_WAIT_MS)
         return Phase.SCAN
     }
 
@@ -379,7 +379,7 @@ class BotEngine(
             guardedTap(cancelPt.first, cancelPt.second, "recoverCancel")
         }
         recycle(p.first)
-        host.sleepMs(700)
+        host.sleepMs(Tuning.SETTLE_AFTER_RECYCLE_MS)
         // 低频拟人化：恢复流程结束后加一次随机等待（H2：让 delay() 真正被使用）
         host.delayRandom()
         return Phase.SCAN
@@ -427,7 +427,7 @@ class BotEngine(
             return slot6Check(session)
         }
         // 漏检保护：等待画面稳定后重查一次同一屏
-        host.sleepMs(800)
+        host.sleepMs(Tuning.RESCAN_SETTLE_MS)
         val reP = shot()
         if (reP != null) {
             val re = reP.second
@@ -544,7 +544,7 @@ class BotEngine(
         var stillStreak = 0
         for (attempt in 0 until Tuning.SLOT6_MAX_ATTEMPTS) {
             val before = host.screenshot()
-            if (before == null) { shotFails++; host.sleepMs(800); continue }
+            if (before == null) { shotFails++; host.sleepMs(Tuning.RESHOT_RETRY_MS); continue }
             host.swipe(
                 xC, h * host.cfg.swipeBottomY, xC, h * host.cfg.swipeTopY,
                 if (attempt == 0) Tuning.SWIPE_FIRST_MS else Tuning.SWIPE_REPEAT_MS
@@ -560,7 +560,7 @@ class BotEngine(
             }
             host.sleepMs(settle.toLong())
             val afterBmp = host.screenshot()
-            if (afterBmp == null) { shotFails++; recycle(before); host.sleepMs(800); continue }
+            if (afterBmp == null) { shotFails++; recycle(before); host.sleepMs(Tuning.RESHOT_RETRY_MS); continue }
             val moved = didScroll(before, afterBmp)
             recycle(before)
             // 轻量探测先行（同 slot6Check）：没图标就不必跑完整识别
@@ -676,7 +676,7 @@ class BotEngine(
             // 宁可多花一帧，也不要用一张坏帧放弃一个本来可买的行（漏买）。
             // 复核通过时后续 S2 一律使用新帧，绝不拿旧帧的文本 bbox 去点。
             recycle(before)
-            host.sleepMs(host.randInt(250, 450).toLong())
+            host.sleepMs(host.randInt(Tuning.RECHECK_SETTLE_MIN_MS, Tuning.RECHECK_SETTLE_MAX_MS).toLong())
             val again = shot() ?: return BuyResult.FAIL
             if (!rowConfirmed(again.second, again.first, t)) { recycle(again.first); return BuyResult.FAIL }
             bmpNow = again.first
@@ -698,7 +698,7 @@ class BotEngine(
         for (i in 0 until host.framesFor(12000)) {
             // 停止响应：长等待每轮检查一次，否则点了停止还要等十几秒才停手
             if (host.stopRequested()) break
-            host.sleepMs(host.randInt(350, 600).toLong())
+            host.sleepMs(host.randInt(Tuning.DIALOG_POLL_MIN_MS, Tuning.DIALOG_POLL_MAX_MS).toLong())
             val p = shot()
             if (p != null && p.second.scene == Scene.BUY_DLG) { dialog = p; break }
             if (p != null) recycle(p.first)
@@ -706,7 +706,7 @@ class BotEngine(
         // A4 观测优先：弹窗刚出现时可能还在渐显动画里（内容未完全呈现），拿它做三重验证
         // 会失败 → 取消 → 重买（玩家实测到的"点了取消又重新买"）。这里补一个短等待并重新取帧。
         val stableDlg = if (dialog != null) {
-            host.sleepMs(host.randInt(220, 360).toLong())
+            host.sleepMs(host.randInt(Tuning.DIALOG_SETTLE_MIN_MS, Tuning.DIALOG_SETTLE_MAX_MS).toLong())
             val s = shot()
             if (s != null && s.second.scene == Scene.BUY_DLG) {
                 recycle(dialog.first)
@@ -724,7 +724,7 @@ class BotEngine(
             // **点击没有生效**（坐标偏了 / 被遮挡 / 弹窗还在路上），这一行依然值得买。
             // 旧逻辑会对它 handledAdd → 该行被永久跳过 = 白白漏掉一个可买的奖牌。
             // 现在只有"已售空"才放弃；仍可购买一律返回 FAIL 走重试路径。
-            host.sleepMs(600)
+            host.sleepMs(Tuning.DIALOG_RECHECK_MS)
             val p2 = host.screenshot()
             var soldOut = false
             if (p2 != null) {
@@ -811,7 +811,7 @@ class BotEngine(
         var oddStreak = 0
         var lastOddText = ""
         for (i in 0 until host.framesFor(10000)) {
-            host.sleepMs(host.randInt(400, 700).toLong())
+            host.sleepMs(host.randInt(Tuning.REFRESH_POLL_MIN_MS, Tuning.REFRESH_POLL_MAX_MS).toLong())
             val p = shot() ?: continue
             val scene = p.second.scene
             if (scene == Scene.OTHER) {
@@ -878,7 +878,7 @@ class BotEngine(
         var dialog: Pair<Bitmap, DetectionResult>? = null
         for (i in 0 until host.framesFor(6000)) {
             if (host.stopRequested()) break
-            host.sleepMs(450)
+            host.sleepMs(Tuning.POLL_TICK_MS)
             val p2 = shot()
             if (p2 != null && p2.second.scene == Scene.REFRESH_DLG) { dialog = p2; break }
             if (p2 != null) recycle(p2.first)
@@ -954,7 +954,7 @@ class BotEngine(
             if (host.stopRequested()) return false
             // 轮询间隔 400~700ms → 200~380ms：识别已经占了 0.64s，sleep 再叠 0.5s
             // 就让每帧逼近 1.2s。收紧后每帧约 0.9s。
-            host.sleepMs(host.randInt(200, 380).toLong())
+            host.sleepMs(host.randInt(Tuning.POLL_TIGHT_MIN_MS, Tuning.POLL_TIGHT_MAX_MS).toLong())
             val bmp = host.screenshot() ?: continue
             val r = engine.analyze(bmp)
             recycle(bmp)
