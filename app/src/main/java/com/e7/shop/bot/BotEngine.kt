@@ -97,7 +97,14 @@ class BotEngine(
     }
 
     private enum class Phase { SCAN, SHOP_SCAN, BUYING, REFRESHING, RECOVER, WAIT, RETRY_NET, DONE }
-    private enum class BuyResult { OK, FAIL, INERT }
+    /**
+     * 购买结果：OK = 买到；FAIL = 暂时性失败（点击可能没生效 → **保留该行**，下轮再试）；
+     * INERT = 确定不用再试（售罄/点错行 → 标记该行）；
+     * VERIFY_FAIL = 弹窗出现了但三重验证反复不过（价格歧义 / 图标不符）——
+     * 这类失败是**确定性的**，继续点同一行毫无意义，达到上限后暂时放弃该行
+     * （红队测试 2026-09-19 发现：旧版把它并进 FAIL，于是会一直锤同一个按钮）。
+     */
+    private enum class BuyResult { OK, FAIL, INERT, VERIFY_FAIL }
 
     /**
      * 购买结果验证的三态（2026-09-19）。
@@ -415,11 +422,13 @@ class BotEngine(
         val targets = snap.candidates.filter { c -> keepCandidate(c) }
         if (targets.isNotEmpty()) {
             for (t in targets) {
-                if (tryBuy(session, t) == BuyResult.FAIL) {
-                    // 失败分类 + 重试预算（P3）：暂时性失败允许下次再试，达到上限才标记硬失败。
+                when (tryBuy(session, t)) {
+                    // 失败分类 + 重试预算（P3）：暂时性失败允许下次再试；验证类失败达到上限后暂时放弃该行。
                     // 关键：**失败也要继续推进到下滑**，不再回 SCAN 反复重试同一行
                     // —— 这正是「购买后不下滑」活锁的根治点。
-                    noteRowFailure(t)
+                    BuyResult.FAIL -> noteRowFailure(t)
+                    BuyResult.VERIFY_FAIL -> noteVerifyFailure(t)
+                    else -> {}
                 }
                 if (capsReached(session)) return Phase.DONE
             }
@@ -436,7 +445,11 @@ class BotEngine(
                 val reTargets = re.candidates.filter { c -> keepCandidate(c) }
                 if (reTargets.isNotEmpty()) {
                     for (t in reTargets) {
-                        if (tryBuy(session, t) == BuyResult.FAIL) noteRowFailure(t)
+                        when (tryBuy(session, t)) {
+                            BuyResult.FAIL -> noteRowFailure(t)
+                            BuyResult.VERIFY_FAIL -> noteVerifyFailure(t)
+                            else -> {}
+                        }
                         if (capsReached(session)) return Phase.DONE
                     }
                     return Phase.REFRESHING
@@ -511,7 +524,11 @@ class BotEngine(
             val targets = snap.candidates.filter { c -> keepCandidate(c) }
             if (targets.isNotEmpty()) {
                 for (t in targets) {
-                    if (tryBuy(session, t) == BuyResult.FAIL) noteRowFailure(t)
+                    when (tryBuy(session, t)) {
+                            BuyResult.FAIL -> noteRowFailure(t)
+                            BuyResult.VERIFY_FAIL -> noteVerifyFailure(t)
+                            else -> {}
+                        }
                     if (capsReached(session)) return Phase.DONE
                 }
                 return Phase.SHOP_SCAN
@@ -576,7 +593,11 @@ class BotEngine(
             val targets = snap.candidates.filter { c -> keepCandidate(c) }
             if (targets.isNotEmpty()) {
                 for (t in targets) {
-                    if (tryBuy(session, t) == BuyResult.FAIL) noteRowFailure(t)
+                    when (tryBuy(session, t)) {
+                            BuyResult.FAIL -> noteRowFailure(t)
+                            BuyResult.VERIFY_FAIL -> noteVerifyFailure(t)
+                            else -> {}
+                        }
                     if (capsReached(session)) return Phase.DONE
                 }
             }
@@ -628,6 +649,15 @@ class BotEngine(
      */
     private val rowAttempts = HashMap<Int, Int>()
 
+    /**
+     * 同一行「弹窗验证失败」的次数（红队测试 2026-09-19 新增）。
+     *
+     * 与 rowAttempts 的区别：那个是"点击可能没生效"（可恢复，永不放弃该行）；
+     * 这个只统计"弹窗出现了但三重验证不过"（价格歧义 / 图标不符）——确定性失败，
+     * 达到 Tuning.ROW_VERIFY_MAX_ATTEMPTS 后暂时放弃该行，避免一直锤同一个按钮。
+     */
+    private val rowVerifyAttempts = HashMap<Int, Int>()
+
     private fun noteRowFailure(t: Candidate) {
         val n = (rowAttempts[t.rowY] ?: 0) + 1
         rowAttempts[t.rowY] = n
@@ -637,6 +667,27 @@ class BotEngine(
         // 现在只记录次数用于日志，是否重试交给正常流程决定
         // —— 刷新与滑动都会清空 rowAttempts 与 handledRows。
         host.log("E7SA.Row", "FAIL x$n kind=${t.kind} rowY=${t.rowY} -> 保留该行，下一轮继续尝试")
+    }
+
+    /**
+     * 「弹窗验证反复不过」的独立预算（红队测试 2026-09-19 发现并修复）。
+     *
+     * 分工：noteRowFailure = 点击可能没生效 → **永远保留该行**（漏买优先）；
+     * noteVerifyFailure = 弹窗出现了但内容对不上（价格歧义 / 图标不符）→ 确定性失败，
+     * 达到上限后暂时放弃该行，避免一直锤同一个按钮。刷新/滑动会清空计数，不是永久跳过。
+     */
+    private fun noteVerifyFailure(t: Candidate) {
+        val n = (rowVerifyAttempts[t.rowY] ?: 0) + 1
+        rowVerifyAttempts[t.rowY] = n
+        if (n >= Tuning.ROW_VERIFY_MAX_ATTEMPTS) {
+            host.handledAdd(t.rowY)
+            host.log(
+                "E7SA.Row",
+                "VERIFY FAIL x$n kind=${t.kind} rowY=${t.rowY} -> 暂时放弃该行（刷新后重置，避免反复锤同一个按钮）"
+            )
+        } else {
+            host.log("E7SA.Row", "VERIFY FAIL x$n kind=${t.kind} rowY=${t.rowY} -> 再试（上限 ${Tuning.ROW_VERIFY_MAX_ATTEMPTS}）")
+        }
     }
 
     /** 购买一个目标：OK/INERT 都标记该行已处理（避免同一行无限循环点击）。 */
@@ -686,7 +737,8 @@ class BotEngine(
         }
         // S2: 行"购买"按钮 = 与该行配对的"购买"文本 bbox 中心；找不到 -> 不购买
         val buyPt = rowBuyPoint(snapNow.lines, t.cy, t.tol, t.cx)
-        if (buyPt == null) { recycle(bmpNow); return BuyResult.FAIL }
+        // 找不到「购买」按钮 = 确定性失败（同一帧再算一次还是 null）→ 走封顶预算
+        if (buyPt == null) { recycle(bmpNow); return BuyResult.VERIFY_FAIL }
         host.log("E7SA.Tap", "rowBuy kind=${t.kind} tap=(${buyPt.first.toInt()},${buyPt.second.toInt()})")
         recycle(bmpNow)
         host.hesitate()
@@ -756,11 +808,12 @@ class BotEngine(
                 return BuyResult.INERT
             }
             host.log("E7SA.Row", "dialog verify FAIL kind=${t.kind} rowY=${t.rowY} dialogKind=${dlgKind ?: "?"} -> 暂时性失败，走重试预算")
-            return BuyResult.FAIL
+            return BuyResult.VERIFY_FAIL
         }
         // S5: 唯一最终购买入口：弹窗"购买"按钮 bbox 中心，全代码库唯一 tap
         val confirmPt = dialogBuy(dlg.second.lines, dlg.first.height)
-        if (confirmPt == null) { recycle(dlg.first); return BuyResult.FAIL }
+        // 弹窗里找不到确认键 = 确定性失败 → 走封顶预算
+        if (confirmPt == null) { recycle(dlg.first); return BuyResult.VERIFY_FAIL }
         host.log("E7SA.Tap", "finalPurchase kind=${t.kind} tap=(${confirmPt.first.toInt()},${confirmPt.second.toInt()})")
         recycle(dlg.first)
         host.hesitate()
@@ -927,6 +980,7 @@ class BotEngine(
         // 验证通过：新一轮商品，清空已处理行与重试预算
         host.handledClear()
         rowAttempts.clear()
+        rowVerifyAttempts.clear()
         // 真正有进展 → 清空未决预算（否则"刷新成功但一直买不到"会被误判为未决而停）
         undecidedStreak = 0
         host.daze()
