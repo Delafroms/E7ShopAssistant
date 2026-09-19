@@ -1,4 +1,4 @@
-﻿# E7SA 识别层离线回归台（第零批 V1 · 已接入落地报告）
+# E7SA 识别层离线回归台（第零批 V1 · 已接入落地报告）
 #
 # 作用：每次改动后跑一次，断言「识别层没有退化」，并归档基线用于对比。
 # 数据来源：App 内诊断基准写出的 benchmark_report.json（合法 JSON，可 adb pull）
@@ -28,7 +28,9 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'   # adb 会往 stderr 写进度信息，Stop 模式会误判为错误
-$adb = 'D:\Android Studio\Android custom\platform-tools\adb.exe'
+# adb 路径：优先用环境变量 ADB，其次从 PATH 查找（不再写死本机路径）
+$adb = if ($env:ADB) { $env:ADB } else { (Get-Command adb -ErrorAction SilentlyContinue).Source }
+if (-not $adb) { throw 'adb not found: set $env:ADB or add adb to PATH' }
 $remote = '/sdcard/Android/data/com.e7.shop/files/benchmark_report.json'
 $outDir = Join-Path $PSScriptRoot 'reports'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null

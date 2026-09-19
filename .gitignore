@@ -47,6 +47,20 @@ keystore.properties
 keystore/
 *.jks
 
+# ===== 根目录构建日志与截图（2026-09-19 补）=====
+# 注意 /*.png 的前导斜杠：只忽略根目录，
+# 写成 *.png 会把 app/src/main/res 里的图标资源一起忽略掉，导致构建缺图。
+/*.txt
+/*.png
+docs/*.jpg
+tools/_probe.png
+
+# 与 assets 重复的模型导出
+/e7sa_ncnn_model/
+
+# APK 签名附属文件
+*.idsig
+
 # ===== 系统 =====
 Thumbs.db
 Desktop.ini

@@ -9,7 +9,7 @@
   证书 SHA-256 `4D:7A:DA:D4:…:A0:33`；口令与说明见 `keystore/KEYSTORE-README.txt`。
 - `app/build.gradle.kts` 从 `keystore.properties` 读取签名配置（该文件已加入 .gitignore），
   **gradle 直接产出已签名 APK**，不再需要手工 zipalign + apksigner。
-- 另一份备份：`D:\deepseek-harness-master\_e7sa_keystore_backup_20260919\`。
+- 另一份备份存放在**项目目录之外的本地位置**（不随仓库分发；请作者自行保管）。
 - **⚠️ 密钥与口令丢失 = 再也无法给已安装用户发更新**（Android 只接受同签名覆盖安装）。
 
 ## 二、versionCode 15 → 16
