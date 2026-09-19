@@ -1,0 +1,66 @@
+name: Bug Report
+description: 报告可复现的缺陷（请勿在此提交安全问题）
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **安全漏洞请不要用这个模板。** 请先阅读 [SECURITY.md](../security/policy) 通过私下渠道报告。
+        提交前请确认：日志与截图**已脱敏**（不要包含账号、密码、设备序列号、个人路径）。
+  - type: input
+    id: version
+    attributes:
+      label: E7SA 版本
+      description: 设置页或关于页显示的版本号 / versionCode
+      placeholder: "例如 v1.0 (versionCode 16)"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      description: 机型 + Android 版本 + 厂商 ROM（不要填设备序列号）
+      placeholder: "例如 OnePlus PLR110 / Android 16 / ColorOS"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 尽量给出可重复的最小步骤
+      placeholder: |
+        1. 打开应用…
+        2. 进入商店…
+        3. 点击开始…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+  - type: dropdown
+    id: stable
+    attributes:
+      label: 是否稳定复现
+      options:
+        - 每次都复现
+        - 偶尔复现
+        - 只遇到过一次
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图（已脱敏）
+      description: 日志位置见 README；请先删除账号、密码、设备标识与个人路径
+    validations:
+      required: false

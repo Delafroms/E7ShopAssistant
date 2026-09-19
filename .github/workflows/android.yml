@@ -1,0 +1,43 @@
+name: Android CI
+
+# 说明：本仓库当前**没有 Gradle Wrapper**（gradlew 未入库），因此这里显式指定 Gradle 版本。
+# 若之后补上 wrapper（gradle wrapper --gradle-version 8.11.1），可把 gradle 换成 ./gradlew。
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      # 签名密钥不入库：没有 keystore.properties 时 release 产物是未签名包，
+      # 所以 CI 只做「编译 + 单测 + lint」，不产出可发布的 APK。
+      # 另注：native 依赖（ncnn / opencv-mobile 预编译目录）不在仓库内，
+      # 需要按 README 的构建说明先准备好，否则 native 编译会失败。
+      - name: Unit tests
+        run: gradle :app:testReleaseUnitTest --console=plain
+      - name: Lint
+        run: gradle :app:lintRelease --console=plain
+      - name: Assemble (unsigned)
+        run: gradle :app:assembleRelease --console=plain
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/tests/**
+            app/build/reports/lint-results-*.html
+          if-no-files-found: ignore

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全问题（请私下报告）
+    url: https://github.com/OWNER/REPO/security/policy
+    about: 权限绕过、数据泄露、任意文件访问等问题请勿公开提交，先看安全策略
