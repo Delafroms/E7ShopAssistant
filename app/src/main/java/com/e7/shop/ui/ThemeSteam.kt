@@ -364,17 +364,8 @@ private fun StHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
     }
     val startText = stringResource(R.string.start)
     val restartText = stringResource(R.string.restart_btn)
-    val stageRes = if (connected) {
-        when (bot.stage) {
-            ShopAccessibilityService.Stage.IDLE -> R.string.not_running
-            ShopAccessibilityService.Stage.CHECKING -> R.string.checking
-            ShopAccessibilityService.Stage.BUYING -> R.string.buying
-            ShopAccessibilityService.Stage.REFRESHING -> R.string.refreshing
-            ShopAccessibilityService.Stage.RESTING -> R.string.resting
-            ShopAccessibilityService.Stage.PAUSED -> R.string.paused
-            ShopAccessibilityService.Stage.WAITING -> R.string.waiting_game
-        }
-    } else R.string.svc_not_enabled
+    // 阶段映射抽到 UiCommon（两主题共用一份，避免"改一条漏一条"）
+    val stageRes = if (connected) stageResOf(bot.stage) else R.string.svc_not_enabled
     val stageText = stringResource(stageRes)
     val stageColor = when {
         !connected -> MaterialTheme.colorScheme.error
@@ -671,23 +662,17 @@ private fun StHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
     }
 
     if (showRisk) {
-        AlertDialog(
-            onDismissRequest = { showRisk = false },
-            title = { Text(stringResource(R.string.dlg_risk_title)) },
-            text = { Text(stringResource(R.string.dlg_risk_msg)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    cfg.riskAccepted = true
-                    showRisk = false
-                    val svc = ShopAccessibilityService.instance
-                    if (svc != null) {
-                        val msg = svc.startBot(0, 0)
-                        toast(context, if (msg == "ok") toastStartedText else msg)
-                    }
-                }) { Text(stringResource(R.string.dlg_accept_risk)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRisk = false }) { Text(stringResource(R.string.dlg_cancel)) }
+        // 弹窗本体与文案抽到 UiCommon（两主题完全一致，避免 BA 再次漏掉风险闸门）
+        RiskConfirmDialog(
+            onDismiss = { showRisk = false },
+            onAccept = {
+                cfg.riskAccepted = true
+                showRisk = false
+                val svc = ShopAccessibilityService.instance
+                if (svc != null) {
+                    val msg = svc.startBot(0, 0)
+                    toast(context, if (msg == "ok") toastStartedText else msg)
+                }
             }
         )
     }
@@ -933,31 +918,16 @@ private fun StSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
     var logoVersion by remember { mutableStateOf(0) }
     var logoMode by remember { mutableStateOf(cfg.logoMode) }
 
-    val bgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 持久化读权限失败：本次选择仍生效，只是重启后可能需重新选图
-                android.util.Log.w("E7SA.UI", "persist uri permission failed: " + e.message)
-            }
-            cfg.bgImage = uri.toString()
-            bgVersion++
-        }
+    // 选图逻辑抽到 UiCommon（背景/Logo 共用一份，两主题共用一份 → 原先 4 份重复）
+    val bgLauncher = rememberImagePicker(context) { uri ->
+        cfg.bgImage = uri.toString()
+        bgVersion++
     }
-    val logoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 持久化读权限失败：本次选择仍生效，只是重启后可能需重新选图
-                android.util.Log.w("E7SA.UI", "persist uri permission failed: " + e.message)
-            }
-            cfg.customLogoPath = uri.toString()
-            cfg.logoMode = "custom"
-            logoMode = "custom"
-            logoVersion++
-        }
+    val logoLauncher = rememberImagePicker(context) { uri ->
+        cfg.customLogoPath = uri.toString()
+        cfg.logoMode = "custom"
+        logoMode = "custom"
+        logoVersion++
     }
 
     Column(

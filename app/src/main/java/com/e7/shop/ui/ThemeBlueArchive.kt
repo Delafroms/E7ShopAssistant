@@ -394,17 +394,8 @@ private fun BaHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
     val diagRawText = stringResource(R.string.diag_raw_capture)
     val diagBenchText = stringResource(R.string.diag_benchmark_done)
     val svcMissingText = stringResource(R.string.svc_not_enabled)
-    val stageRes = if (connected) {
-        when (bot.stage) {
-            ShopAccessibilityService.Stage.IDLE -> R.string.not_running
-            ShopAccessibilityService.Stage.CHECKING -> R.string.checking
-            ShopAccessibilityService.Stage.BUYING -> R.string.buying
-            ShopAccessibilityService.Stage.REFRESHING -> R.string.refreshing
-            ShopAccessibilityService.Stage.RESTING -> R.string.resting
-            ShopAccessibilityService.Stage.PAUSED -> R.string.paused
-            ShopAccessibilityService.Stage.WAITING -> R.string.waiting_game
-        }
-    } else R.string.svc_not_enabled
+    // 阶段映射抽到 UiCommon（两主题共用一份，避免"改一条漏一条"）
+    val stageRes = if (connected) stageResOf(bot.stage) else R.string.svc_not_enabled
     val stageText = stringResource(stageRes)
     val stageColor = when {
         !bot.running -> Color(0xFF9FB6CE)
@@ -741,23 +732,17 @@ private fun BaHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
     // 风险确认弹窗：与 Steam 主题同一份文案、同一道闸门。
     // 确认后立即启动 —— 玩家点"开始"的意图不该被弹窗打断成"再点一次"。
     if (showRisk) {
-        AlertDialog(
-            onDismissRequest = { showRisk = false },
-            title = { Text(stringResource(R.string.dlg_risk_title)) },
-            text = { Text(stringResource(R.string.dlg_risk_msg)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    cfg.riskAccepted = true
-                    showRisk = false
-                    val svc = ShopAccessibilityService.instance
-                    if (svc != null) {
-                        val msg = svc.startBot(0, 0)
-                        toast(context, if (msg == "ok") context.getString(R.string.toast_started) else msg)
-                    }
-                }) { Text(stringResource(R.string.dlg_accept_risk)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRisk = false }) { Text(stringResource(R.string.dlg_cancel)) }
+        // 弹窗本体与文案抽到 UiCommon（与 Steam 同一份，避免再次漏掉风险闸门）
+        RiskConfirmDialog(
+            onDismiss = { showRisk = false },
+            onAccept = {
+                cfg.riskAccepted = true
+                showRisk = false
+                val svc = ShopAccessibilityService.instance
+                if (svc != null) {
+                    val msg = svc.startBot(0, 0)
+                    toast(context, if (msg == "ok") context.getString(R.string.toast_started) else msg)
+                }
             }
         )
     }
@@ -995,28 +980,10 @@ private fun BaProfile(cfg: AppConfig) {
 @Composable
 private fun BaSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
     val context = LocalContext.current
-    val bgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 持久化读权限失败：本次选择仍生效，只是重启后可能需重新选图
-                android.util.Log.w("E7SA.UI", "persist uri permission failed: " + e.message)
-            }
-            cfg.bgImage = uri.toString()
-        }
-    }
-    val logoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 持久化读权限失败：本次选择仍生效，只是重启后可能需重新选图
-                android.util.Log.w("E7SA.UI", "persist uri permission failed: " + e.message)
-            }
-            cfg.customLogoPath = uri.toString()
-            cfg.logoMode = "custom"
-        }
+    val bgLauncher = rememberImagePicker(context) { uri -> cfg.bgImage = uri.toString() }
+    val logoLauncher = rememberImagePicker(context) { uri ->
+        cfg.customLogoPath = uri.toString()
+        cfg.logoMode = "custom"
     }
 
     Column(
