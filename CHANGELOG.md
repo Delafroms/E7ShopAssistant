@@ -65,7 +65,11 @@
 ## 未发布（Unreleased）
 
 ### In Progress
-- GitHub Actions 工作流（构建 + 单测 + lint）已加入，尚未在真实仓库运行验证
+- **GitHub Actions**：首次运行失败 —— CI 环境未接受 `ndk;29.0.13113456` 的 SDK 许可证
+  （`LicenceNotAcceptedException`，失败发生在配置阶段，单元测试尚未开始）。
+  已修正为**只跑单元测试与 Lint**，并用 `-PskipNative=true` 跳过原生层配置。
+- **CI 不构建 APK**：原生依赖（ncnn / opencv-mobile 预编译目录，约 146MB）未入库，
+  见 `docs/BUILD.md`；本地完整构建需按该文档准备原生依赖。
 - Gradle Wrapper 尚未入库（当前需自行准备 Gradle 8.11.1）
 
 ### Planned

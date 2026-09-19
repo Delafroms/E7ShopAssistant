@@ -12,6 +12,18 @@ val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 
+/**
+ * 是否跳过原生层（ncnn / OpenCV）构建，用 `-PskipNative=true` 开启。
+ *
+ * 为什么需要：原生层依赖两个**预编译目录**（`app/src/main/jni/ncnn-*` 与
+ * `opencv-mobile-*`，合计约 146MB），它们没有入库（见 .gitignore），
+ * 而且声明 `ndkVersion` 本身就会让 AGP 要求安装对应 NDK（CI 上会因未接受
+ * SDK 许可证而失败：LicenceNotAcceptedException）。
+ * 因此 CI 只跑「单元测试 + lint」这类不需要原生层的任务；完整 APK 构建需要
+ * 先按 docs/BUILD.md 准备好原生依赖。
+ */
+val skipNative = (providers.gradleProperty("skipNative").orNull ?: "false").toBoolean()
+
 android {
     namespace = "com.e7.shop"
     compileSdk = 36
@@ -29,20 +41,26 @@ android {
             // real phones only: keep the universal APK lean (no emulator ABIs)
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
-        ndkVersion = "29.0.13113456"   // r29: clang 20 libomp has __kmpc_dispatch_deinit
+        if (!skipNative) {
+            ndkVersion = "29.0.13113456"   // r29: clang 20 libomp has __kmpc_dispatch_deinit
+        }
 
         // PP-OCRv5 (ncnn) native OCR engine - replaces slow ML Kit
-        externalNativeBuild {
-            cmake {
-                cppFlags += listOf("-std=c++11")
+        if (!skipNative) {
+            externalNativeBuild {
+                cmake {
+                    cppFlags += listOf("-std=c++11")
+                }
             }
         }
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/jni/CMakeLists.txt")
-            version = "3.22.1"
+    if (!skipNative) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/jni/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
     }
 

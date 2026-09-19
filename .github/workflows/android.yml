@@ -1,7 +1,15 @@
 name: Android CI
 
-# 说明：本仓库当前**没有 Gradle Wrapper**（gradlew 未入库），因此这里显式指定 Gradle 版本。
-# 若之后补上 wrapper（gradle wrapper --gradle-version 8.11.1），可把 gradle 换成 ./gradlew。
+# 这个工作流**只做不需要原生层的事**：单元测试 + Lint。
+#
+# 为什么不构建 APK：
+#   原生层依赖两个预编译目录（app/src/main/jni/ncnn-* 与 opencv-mobile-*，约 146MB），
+#   它们没有入库（见 .gitignore）；而只要声明 ndkVersion / externalNativeBuild，
+#   AGP 在配置阶段就会要求安装对应 NDK —— CI 上会因未接受 SDK 许可证而失败
+#   （LicenceNotAcceptedException: ndk;29.0.13113456）。
+#   因此这里用 -PskipNative=true 跳过原生层；完整 APK 构建步骤见 docs/BUILD.md。
+#
+# 另外：仓库当前没有 Gradle Wrapper（gradlew 未入库），所以显式指定 Gradle 版本。
 
 on:
   push:
@@ -9,29 +17,34 @@ on:
   pull_request:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
+
+      # 安装 Android SDK 平台与构建工具，并接受许可证
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      # 签名密钥不入库：没有 keystore.properties 时 release 产物是未签名包，
-      # 所以 CI 只做「编译 + 单测 + lint」，不产出可发布的 APK。
-      # 另注：native 依赖（ncnn / opencv-mobile 预编译目录）不在仓库内，
-      # 需要按 README 的构建说明先准备好，否则 native 编译会失败。
+
       - name: Unit tests
-        run: gradle :app:testReleaseUnitTest --console=plain
+        run: gradle :app:testReleaseUnitTest -PskipNative=true --console=plain
+
       - name: Lint
-        run: gradle :app:lintRelease --console=plain
-      - name: Assemble (unsigned)
-        run: gradle :app:assembleRelease --console=plain
+        run: gradle :app:lintRelease -PskipNative=true --console=plain
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
