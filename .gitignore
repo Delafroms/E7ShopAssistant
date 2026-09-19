@@ -75,3 +75,7 @@ Desktop.ini
 /test_ocr_shop.py
 /test_ultra.py
 /test_yolo_out.py
+
+# 属于其它项目的文件与本机 dump（绝不入库）
+/tools/stellar_keepalive.sh
+/ui.xml
