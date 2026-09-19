@@ -65,3 +65,13 @@ tools/_probe.png
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# ===== 本机开发辅助脚本（含本机绝对路径，不入公开仓库）=====
+/auto_start.py
+/auto_stop.py
+/pp_ocr.py
+/test_det_shop.py
+/test_fp16.py
+/test_ocr_shop.py
+/test_ultra.py
+/test_yolo_out.py
