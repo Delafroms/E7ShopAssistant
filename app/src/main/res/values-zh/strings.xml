@@ -175,6 +175,11 @@
     <string name="wd_ok_connection">连接成功</string>
     <string name="wd_err_auth">账号或应用密码错误（401）</string>
     <string name="wd_err_http">HTTP %1$d</string>
+    <string name="wd_ok_dir_created">连接成功，已创建云端目录「%1$s」</string>
+    <string name="wd_err_dir_create">无法创建云端目录（HTTP %1$d）</string>
+    <string name="wd_err_dir_parent">云端目录的上级不存在（HTTP 409）</string>
+    <string name="wd_err_dir_missing">云端目录不存在（HTTP %1$d）—— 请先点「测试连接」</string>
+    <string name="wd_err_root_missing">服务器路径不存在（HTTP %1$d）—— 请检查服务器地址</string>
     <string name="wd_err_network">网络错误：%1$s</string>
     <string name="wd_ok_upload">上传成功</string>
     <string name="wd_err_upload">上传失败 HTTP %1$d</string>

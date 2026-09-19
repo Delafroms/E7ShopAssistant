@@ -175,6 +175,11 @@
     <string name="wd_ok_connection">Connection OK</string>
     <string name="wd_err_auth">Wrong account or app password (401)</string>
     <string name="wd_err_http">HTTP %1$d</string>
+    <string name="wd_ok_dir_created">Connection OK — created cloud folder “%1$s”</string>
+    <string name="wd_err_dir_create">Cannot create cloud folder (HTTP %1$d)</string>
+    <string name="wd_err_dir_parent">Cloud folder\'s parent does not exist (HTTP 409)</string>
+    <string name="wd_err_dir_missing">Cloud folder missing (HTTP %1$d) — run Test connection first</string>
+    <string name="wd_err_root_missing">Server path not found (HTTP %1$d) — check the server URL</string>
     <string name="wd_err_network">Network error: %1$s</string>
     <string name="wd_ok_upload">Upload success</string>
     <string name="wd_err_upload">Upload failed HTTP %1$d</string>

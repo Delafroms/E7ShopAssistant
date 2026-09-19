@@ -66,19 +66,54 @@ class WebDavSync(private val cfg: AppConfig, private val ctx: Context? = null) {
         return sb.toString().removeSuffix("/")
     }
 
-    suspend fun testConnection(): Result = withContext(Dispatchers.IO) {
-        if (serverRejected()) return@withContext Result(false, msg(R.string.wd_err_insecure))
-        try {
-            val req = Request.Builder()
-                .url(buildUrl())
+    /** 服务器根 URL（验权用）：只到 base，不带目录与文件名。 */
+    private fun rootUrl(): String {
+        val b = cfg.wdServer.trim()
+        return if (b.endsWith("/")) b else b + "/"
+    }
+
+    /** 云端目录 URL（PROPFIND / MKCOL 用；dir 为空时即根）。 */
+    private fun dirUrl(): String = buildUrl(filename = "")
+
+    /** 目录是否已存在（dir 为空视为存在：根集合一定在）。 */
+    private fun dirExists(): Boolean {
+        if (cfg.wdRemoteDir.trim().isEmpty()) return true
+        return try {
+            val req = Request.Builder().url(dirUrl())
                 .header("Authorization", authHeader())
-                .method("PROPFIND", null)
-                .build()
-            client.newCall(req).execute().use { resp ->
+                // Depth: 0 = 只问"这个资源本身在不在"。不加时按 RFC 默认是 infinity，
+                // 部分服务器（含坚果云）会直接拒绝这种"整棵树"查询。
+                .header("Depth", "0")
+                .method("PROPFIND", null).build()
+            client.newCall(req).execute().use { it.code in 200..299 }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 确保云端目录存在 —— **2026-09-19 实测的 409 根因**。
+     *
+     * 坚果云对"不存在的集合"返回 **409 Conflict**（不是 404），而旧版代码里
+     * **从来没有创建过目录**：首次使用时目录不存在 → 测试连接永远是 HTTP 409、
+     * 上传也必然失败。这里按 WebDAV 标准补一步 MKCOL：
+     *   201 = 新建成功；405 = 已存在（部分服务器如此应答）；2xx = 其他成功形态。
+     * 返回 null 表示"目录就绪"，否则返回可直接展示给用户的失败结果。
+     */
+    private fun ensureDir(): Result? {
+        if (cfg.wdRemoteDir.trim().isEmpty()) return null
+        if (dirExists()) return null
+        return try {
+            val mk = Request.Builder().url(dirUrl())
+                .header("Authorization", authHeader())
+                .method("MKCOL", null).build()
+            client.newCall(mk).execute().use { r ->
                 when {
-                    resp.code in 200..399 -> Result(true, msg(R.string.wd_ok_connection))
-                    resp.code == 401 -> Result(false, msg(R.string.wd_err_auth))
-                    else -> Result(false, msg(R.string.wd_err_http, resp.code))
+                    r.code == 201 || r.code == 405 -> null
+                    r.code in 200..299 -> null
+                    r.code == 401 -> Result(false, msg(R.string.wd_err_auth))
+                    r.code == 409 -> Result(false, msg(R.string.wd_err_dir_parent))
+                    else -> Result(false, msg(R.string.wd_err_dir_create, r.code))
                 }
             }
         } catch (e: Exception) {
@@ -86,8 +121,44 @@ class WebDavSync(private val cfg: AppConfig, private val ctx: Context? = null) {
         }
     }
 
+    suspend fun testConnection(): Result = withContext(Dispatchers.IO) {
+        if (serverRejected()) return@withContext Result(false, msg(R.string.wd_err_insecure))
+        // ① 先验服务器根：这一步同时区分"地址错"与"账号密码错"。
+        //    （旧版直接 PROPFIND 文件路径，一旦目录不存在就只剩一个裸 "HTTP 409"，
+        //      三种完全不同的故障看起来一模一样。）
+        try {
+            val root = Request.Builder()
+                .url(rootUrl())
+                .header("Authorization", authHeader())
+                .header("Depth", "0")   // 见 dirExists 的说明：避免 infinity 深度查询
+                .method("PROPFIND", null)
+                .build()
+            client.newCall(root).execute().use { r ->
+                when {
+                    r.code == 401 -> return@withContext Result(false, msg(R.string.wd_err_auth))
+                    r.code == 409 -> return@withContext Result(false, msg(R.string.wd_err_root_missing, r.code))
+                    r.code !in 200..399 -> return@withContext Result(false, msg(R.string.wd_err_http, r.code))
+                    else -> Unit   // 2xx/3xx：根可达且已通过鉴权，继续下一步
+                }
+            }
+        } catch (e: Exception) {
+            return@withContext Result(false, msg(R.string.wd_err_network, e.message ?: ""))
+        }
+        // ② 再确保云端目录存在（不存在就创建）。坚果云对不存在的集合返回 409 —— 旧版卡在这。
+        val dir = cfg.wdRemoteDir.trim()
+        val existed = dirExists()
+        ensureDir()?.let { return@withContext it }
+        Result(
+            true,
+            if (dir.isEmpty() || existed) msg(R.string.wd_ok_connection)
+            else msg(R.string.wd_ok_dir_created, dir)
+        )
+    }
+
     suspend fun upload(json: String): Result = withContext(Dispatchers.IO) {
         if (serverRejected()) return@withContext Result(false, msg(R.string.wd_err_insecure))
+        // 上传前确保目录存在：否则坚果云回 409（父集合不存在），旧版把裸 409 丢给用户。
+        ensureDir()?.let { return@withContext it }
         try {
             val body = json.toRequestBody("application/json".toMediaType())
             val req = Request.Builder()
@@ -99,6 +170,7 @@ class WebDavSync(private val cfg: AppConfig, private val ctx: Context? = null) {
                 when {
                     resp.code in 200..299 -> Result(true, msg(R.string.wd_ok_upload))
                     resp.code == 401 -> Result(false, msg(R.string.wd_err_auth))
+                    resp.code == 409 -> Result(false, msg(R.string.wd_err_dir_missing, resp.code))
                     else -> Result(false, msg(R.string.wd_err_upload, resp.code))
                 }
             }
@@ -136,6 +208,8 @@ class WebDavSync(private val cfg: AppConfig, private val ctx: Context? = null) {
                         }
                     }
                     resp.code == 404 -> Result(false, msg(R.string.wd_err_no_file))
+                    // 坚果云对"目录/文件不存在"回 409 而不是 404 → 对用户而言就是"云端还没有记录"。
+                    resp.code == 409 -> Result(false, msg(R.string.wd_err_no_file))
                     resp.code == 401 -> Result(false, msg(R.string.wd_err_auth))
                     else -> Result(false, msg(R.string.wd_err_download, resp.code))
                 }
