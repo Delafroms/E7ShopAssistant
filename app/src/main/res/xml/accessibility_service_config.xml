@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  packageNames 限定为游戏本体（2026-09-19）：
+  · 本服务从不读取控件树（没有 canRetrieveWindowContent，全库 0 处 rootInActiveWindow），
+    截图与手势是全局能力、不依赖事件；
+  · onAccessibilityEvent 是空实现 —— 不限定包名等于订阅**所有应用**的窗口变化，
+    属无收益的暴露面。限定后功能完全不变，只是不再收到无关应用的事件。
+  · 换区服/包名变体时这里要同步（只影响"事件订阅"，不影响截图与点击）。
+-->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
@@ -6,4 +14,5 @@
     android:canPerformGestures="true"
     android:canTakeScreenshot="true"
     android:description="@string/accessibility_desc"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="100"
+    android:packageNames="com.stove.epic7.google" />

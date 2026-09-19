@@ -84,7 +84,11 @@ object ScoreEngine {
         }
         if (family == null) return null
 
-        val nameIdx = lower.indexOf(nameUsed!!.lowercase())
+        // 在**原串**上做忽略大小写查找（2026-09-19 修复）：旧版在 lowercase() 后的串上算下标、
+        // 却拿同一下标去切原串 —— 遇到 'İ' 这类"小写后长度会变"的字符会切错甚至越界，
+        // 而异常被上层 catch 吞成"OCR 失败"，现场极难定位。
+        val nameIdx = line.indexOf(nameUsed!!, ignoreCase = true)
+        if (nameIdx < 0) return null
         val tail = line.substring(nameIdx + nameUsed.length)
 
         // numeric value right after the stat name (with optional % sign)

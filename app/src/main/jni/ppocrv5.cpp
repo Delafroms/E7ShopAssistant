@@ -60,7 +60,15 @@ static cv::Mat get_rotate_crop_image(const cv::Mat& rgb, const Object& object)
     const float rh = object.rrect.size.height;
 
     const int target_height = 48;
+
+    // rw 必须为正（2026-09-19 加固）：minAreaRect 对近似共线的轮廓（≥3 点，
+    // 上游 contour.size() <= 2 挡不住）可能给出宽度 0 —— 此时 rh*48/0 = inf，
+    // warpAffine 收到非法尺寸会抛 cv::Exception，而异常穿透 JNI 边界 = std::terminate（进程直接死）。
+    // 这里挡掉退化框：返回空 Mat，调用方按"这个框没有文本"跳过。
+    if (!(rw > 1.0f)) return cv::Mat();
+
     const float target_width = rh * target_height / rw;
+    if (!(target_width > 1.0f) || target_width > 8192.0f) return cv::Mat();
 
     // warpperspective shall be used to rotate the image
     // but actually they are all rectangles, so warpaffine is almost enough  :P
@@ -298,7 +306,12 @@ int PPOCRv5::detect(const cv::Mat& rgb, std::vector<Object>& objects)
 
         cv::findContours(bitmap, contours, hierarchy, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
-        // DIAGNOSTIC: pinpoint where on-device det yields 0 boxes
+        // DIAGNOSTIC: pinpoint where on-device det yields 0 boxes.
+        // 2026-09-19：这段逐像素扫描（640×640≈41 万次 pred.at<uchar>）原先**无条件**跑在
+        // 生产热路径上，每帧白烧 CPU 并打两条 logcat。改为编译期开关：排查"0 框"时
+        // 改成 true 重新编译即可，默认零开销（常量折叠后整段被优化掉）。
+        static const bool kDetDiag = false;
+        if (kDetDiag)
         {
             unsigned char pmin = pred.at<unsigned char>(0);
             unsigned char pmax = pred.at<unsigned char>(0);
@@ -384,8 +397,9 @@ int PPOCRv5::detect(const cv::Mat& rgb, std::vector<Object>& objects)
             objects.push_back(obj);
         }
 
-        __android_log_print(ANDROID_LOG_INFO, "E7OCR", "det-diag: scorePass=%d sizePass=%d finalBoxes=%zu",
-                            n_score_pass, n_size_pass, objects.size());
+        if (kDetDiag)
+            __android_log_print(ANDROID_LOG_INFO, "E7OCR", "det-diag: scorePass=%d sizePass=%d finalBoxes=%zu",
+                                n_score_pass, n_size_pass, objects.size());
     }
 
     return 0;
@@ -393,9 +407,14 @@ int PPOCRv5::detect(const cv::Mat& rgb, std::vector<Object>& objects)
 
 int PPOCRv5::recognize(const cv::Mat& rgb, Object& object)
 {
-    cv::setNumThreads(1);
-
+    // 本函数是在 `#pragma omp parallel for`（见 detect_and_recognize）里被**并行调用**的。
+    // 旧实现在这里调 cv::setNumThreads(1) —— 在并行区内写全局线程数设置，语义可疑且无意义
+    // （JNI_OnLoad 已经设过一次），2026-09-19 删除。
     cv::Mat roi = get_rotate_crop_image(rgb, object);
+
+    // 退化框会被 get_rotate_crop_image 挡成空 Mat：跳过而不是继续算，
+    // 否则 from_pixels 拿到空数据，后续推理结果不可预期。
+    if (roi.empty()) return 0;
 
     ncnn::Mat in = ncnn::Mat::from_pixels(roi.data, ncnn::Mat::PIXEL_RGB2BGR, roi.cols, roi.rows);
 

@@ -81,11 +81,13 @@ void __kmpc_dispatch_fini_4u(void*, int32_t) {}
 void __kmpc_dispatch_fini_4(void*, int32_t) {}
 }
 
-// Fix the Android libomp crash: libncnn was compiled with OpenMP, and its
-// first parallel region initialises libomp, whose affinity setup asserts on
-// Android (__kmp_affinity_initialize -> __kmp_debug_assert -> SIGABRT).
-// Setting these BEFORE any OpenMP region runs disables affinity init and
-// keeps the runtime single-threaded (fast enough for OCR boxes).
+// 【历史遗留，2026-09-19 补注】以下 setenv 是"真 libomp"时代为规避
+// __kmp_affinity_initialize -> __kmp_debug_assert -> SIGABRT 而加的。
+// 现状：CMakeLists 已把 libomp 从链接线剔除（改用 ncnn 自带的 simpleomp，
+// 见 CMakeLists 里 -fopenmp 与 --allow-multiple-definition 的说明），
+// 因此这几行现在是**无副作用的防御性设置**（simpleomp 不读这些环境变量）。
+// 保留而非删除的理由：万一将来链接回真 libomp，这层保护还在；
+// 在此注明，是为了终止"注释与构建现状不符"继续误导后续排查。
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
 {
     setenv("KMP_AFFINITY", "disabled", 1);

@@ -46,6 +46,14 @@ class AppConfig(context: Context) {
             }
             sp.edit().remove("wdPassword").apply()
         }
+        // 账号同理（2026-09-19）：它原先也在 e7_config 里，会随备份外流。
+        val legacyAcc = sp.getString("wdAccount", null)
+        if (legacyAcc != null) {
+            if (!secrets.contains("wdAccount")) {
+                secrets.edit().putString("wdAccount", legacyAcc).apply()
+            }
+            sp.edit().remove("wdAccount").apply()
+        }
     }
 
     companion object {
@@ -315,9 +323,16 @@ class AppConfig(context: Context) {
         get() = sp.getString("wdServer", "https://dav.jianguoyun.com/dav/") ?: ""
         set(v) = sp.edit().putString("wdServer", v).apply()
 
+    /**
+     * WebDAV 账号（通常是邮箱）。
+     *
+     * **存独立凭据文件**（2026-09-19 修复）：它原先留在 e7_config 里，而 e7_config 是
+     * 会被云备份 / 换机迁移带走的那一份 —— 密码排除了、账号却没排除，等于
+     * "保险柜锁得很好，钥匙的照片还贴在要寄走的箱子上"。账号与密码同属凭据，必须同一处置。
+     */
     var wdAccount: String
-        get() = sp.getString("wdAccount", "") ?: ""
-        set(v) = sp.edit().putString("wdAccount", v).apply()
+        get() = secrets.getString("wdAccount", "") ?: ""
+        set(v) = secrets.edit().putString("wdAccount", v).apply()
 
     /** WebDAV 应用密码：存独立凭据文件（被备份规则排除，不随云备份/换机迁移外流）。 */
     var wdPassword: String

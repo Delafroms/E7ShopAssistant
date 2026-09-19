@@ -32,10 +32,29 @@ object PpOcr {
 
     data class OcrLine(val text: String, val cx: Float, val cy: Float, val prob: Float)
 
+    /**
+     * 最近一次失败的描述（2026-09-19 新增）。
+     *
+     * 为什么需要：`recognize` 内部已把 Throwable 吞成 emptyList（fail-closed），
+     * 调用方 Recognition 里的 try/catch 因此**永远不会进入** —— 它的
+     * notePerceptionFailure 是死代码，"native 崩了但日志一片安静"的盲区又回来了。
+     * 现在失败在这里留痕，调用方用 [takeFailure] 取走并上报（取走即清空，不重复报）。
+     */
+    @Volatile
+    private var lastFail: Throwable? = null
+
+    /** 取走并清空最近一次失败；无失败返回 null。 */
+    fun takeFailure(): Throwable? {
+        val f = lastFail
+        lastFail = null
+        return f
+    }
+
     /** Run PP-OCRv5 on a bitmap. Empty list on any failure (fail-closed). */
     fun recognize(bmp: Bitmap): List<OcrLine> {
         val arr = try { nativeOcr(bmp) } catch (e: Throwable) {
             android.util.Log.e("PpOcr", "nativeOcr failed", e)
+            lastFail = e
             null
         } ?: return emptyList()
         return arr.mapNotNull { s ->

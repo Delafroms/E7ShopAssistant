@@ -148,27 +148,36 @@ class FloatyController(
 
     /** 每次 start = 全新会话，清空上一轮时间线并重置去重游标。 */
     fun resetEventLog(startedText: String) {
-        synchronized(eventLogLock) { eventLog.clear() }
-        lastLoggedStage = null
-        lastLoggedError = ""
-        lastLoggedBm = -1
-        lastLoggedMedal = -1
-        lastLoggedRefresh = -1
-        logEvent(startedText)
+        // 2026-09-19 修复：去重游标原先在锁外读写（bot 线程写 onStageChanged/onCountersChanged，
+        // 主线程写 resetEventLog）——只锁住 eventLog 本身不够，游标本身仍是竞态源。
+        // 现在游标与日志共用 eventLogLock（synchronized 可重入，logEvent 内部再加锁无碍）。
+        synchronized(eventLogLock) {
+            eventLog.clear()
+            lastLoggedStage = null
+            lastLoggedError = ""
+            lastLoggedBm = -1
+            lastLoggedMedal = -1
+            lastLoggedRefresh = -1
+            logEvent(startedText)
+        }
     }
 
     /** 阶段变化 → 事件日志。相同阶段不重复记录（避免刷屏）。 */
     fun onStageChanged(stage: Stage, text: String) {
-        if (lastLoggedStage == stage) return
-        lastLoggedStage = stage
-        logEvent(text)
+        synchronized(eventLogLock) {
+            if (lastLoggedStage == stage) return
+            lastLoggedStage = stage
+            logEvent(text)
+        }
     }
 
     /** 错误变化 → 事件日志。空串与重复值都跳过。 */
     fun onErrorChanged(msg: String, text: String) {
-        if (msg.isEmpty() || msg == lastLoggedError) return
-        lastLoggedError = msg
-        logEvent(text)
+        synchronized(eventLogLock) {
+            if (msg.isEmpty() || msg == lastLoggedError) return
+            lastLoggedError = msg
+            logEvent(text)
+        }
     }
 
     /**
@@ -181,17 +190,19 @@ class FloatyController(
         bookmarks: Int, medals: Int, refreshes: Int,
         bookmarkText: String, medalText: String, refreshText: String
     ) {
-        if (bookmarks != lastLoggedBm) {
-            lastLoggedBm = bookmarks
-            logEvent(bookmarkText)
-        }
-        if (medals != lastLoggedMedal) {
-            lastLoggedMedal = medals
-            logEvent(medalText)
-        }
-        if (refreshes != lastLoggedRefresh) {
-            lastLoggedRefresh = refreshes
-            logEvent(refreshText)
+        synchronized(eventLogLock) {
+            if (bookmarks != lastLoggedBm) {
+                lastLoggedBm = bookmarks
+                logEvent(bookmarkText)
+            }
+            if (medals != lastLoggedMedal) {
+                lastLoggedMedal = medals
+                logEvent(medalText)
+            }
+            if (refreshes != lastLoggedRefresh) {
+                lastLoggedRefresh = refreshes
+                logEvent(refreshText)
+            }
         }
     }
 

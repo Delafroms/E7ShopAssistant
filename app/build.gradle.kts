@@ -67,6 +67,16 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    lint {
+        // 2026-09-19：建立 lint 基线，取代"`-x lint` 整体绕过"。
+        // 基线冻结"当前已知问题"（含设计使然的 ProtectedPermissions），之后**新增**的问题才会报出来
+        // —— 从"没人看的 200 条"变成"新问题即信号"。abortOnError=true 让它成为真门禁。
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+        checkReleaseBuilds = true
+        warningsAsErrors = false
+    }
 }
 
 dependencies {

@@ -102,10 +102,26 @@ object YoloDet {
         val isIcon: Boolean get() = clsName == "bookmark" || clsName == "medal"
     }
 
+    /**
+     * 最近一次推理失败的异常（2026-09-19 新增，与 PpOcr.takeFailure 同因）：
+     * detect 内部已把 Throwable 吞成 emptyList，调用方的 try/catch 永不进入 →
+     * 失败留痕必须由这里提供，否则"native 崩了但日志一片安静"。
+     */
+    @Volatile
+    private var lastFail: Throwable? = null
+
+    /** 取走并清空最近一次失败；无失败返回 null。 */
+    fun takeFailure(): Throwable? {
+        val f = lastFail
+        lastFail = null
+        return f
+    }
+
     /** Run YOLO detection. Empty list on any failure (fail-closed). */
     fun detect(bmp: Bitmap): List<Box> {
         val arr = try { nativeDetect(bmp) } catch (e: Throwable) {
             android.util.Log.e("YoloDet", "nativeDetect failed", e)
+            lastFail = e
             null
         } ?: return emptyList()
         return arr.mapNotNull { s ->

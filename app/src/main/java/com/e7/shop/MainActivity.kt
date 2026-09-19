@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
         val cfg = AppConfig(this)
         applyLocale(cfg.appLanguage)
         enterImmersiveMode()
+        requestNotificationPermissionIfNeeded()
         setContent {
             var appearance by rememberSaveable { mutableStateOf(cfg.appearance) }
             val theme = com.e7.shop.ui.ThemeRegistry.forId(appearance)
@@ -142,6 +143,24 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
+        }
+    }
+
+    /**
+     * Android 13+ 必须**运行时申请** POST_NOTIFICATIONS（2026-09-19 修复）。
+     *
+     * 旧版只在清单里声明、代码零处申请 —— 真机 granted=false，保活通知不显示，
+     * 玩家看不到"机器人在跑"，也就无从判断保活是否生效（功能没坏，但反馈闭环断了）。
+     */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+        try {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 5002)
+        } catch (e: Exception) {
+            android.util.Log.w("E7SA.UI", "notification permission request failed: " + e.message)
         }
     }
 
@@ -325,7 +344,9 @@ internal fun ChangelogDialog(show: Boolean, onDismiss: () -> Unit) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         WebView(ctx).apply {
-                            settings.javaScriptEnabled = true
+                            // 2026-09-19：更新日志是本地生成、全文转义的 HTML，不需要 JS；
+                            // 开着 JS 属"无收益地扩大攻击面"，关掉（渲染行为不变）。
+                            settings.javaScriptEnabled = false
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             loadDataWithBaseURL(
                                 null,

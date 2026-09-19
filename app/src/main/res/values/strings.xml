@@ -3,8 +3,6 @@
     <string name="app_name">E7 Shop Assistant</string>
     <string name="accessibility_label">E7 Shop Assistant Service</string>
     <string name="accessibility_desc">Used to simulate human-like taps and swipes for the Epic Seven secret shop auto farming. Requires explicit user enablement.</string>
-    <string name="logo_text">EPIC SEVEN</string>
-    <string name="logo_subtitle">E7 Shop Assistant - Auto bookmark/medal farming</string>
 
     <!-- home -->
     <string name="not_running">Not running</string>
@@ -21,42 +19,23 @@
     <string name="sky_spent">Sky spent</string>
     <string name="gold_spent">Gold spent</string>
     <string name="run_time">Run time</string>
-    <string name="stat_lbl_bookmark">📖 Bookmarks</string>
-    <string name="stat_lbl_medal">🏅 Mystic Medals</string>
-    <string name="stat_lbl_refresh">🔄 Refreshes</string>
-    <string name="stat_lbl_sky">💎 Skystones</string>
-    <string name="stat_lbl_gold">💰 Gold</string>
-    <string name="stat_lbl_time">⏱ This run</string>
     <string name="today_runtime">Today runtime</string>
     <string name="total_runtime">Total runtime</string>
     <string name="start">Start</string>
     <string name="pause">Pause</string>
     <string name="stop">Stop</string>
-    <string name="risk_title">RISK WARNING</string>
-    <string name="risk_notice">Automation may violate game ToS and risk a ban. This tool uses human-like behavior to lower the risk but cannot guarantee safety. Use at your own risk.</string>
 
     <!-- records -->
-    <string name="records_title">Cost and Rewards - Total Records</string>
     <string name="runs">Runs</string>
-    <string name="total_time">Total time</string>
-    <string name="upload_records">Upload records to cloud (Jianguoyun)</string>
-    <string name="download_records">Download records from cloud</string>
-    <string name="history">History</string>
     <string name="no_history">No history yet</string>
 
     <!-- user -->
-    <string name="user_title">User - Cloud Account</string>
-    <string name="user_desc">Login/register needs a server, so this app uses Jianguoyun WebDAV as your cloud account: bind it and records sync across phones.</string>
     <string name="server_url">Server URL</string>
     <string name="account">Jianguoyun account (email)</string>
     <string name="app_password">App password (from Jianguoyun site, not login password)</string>
     <string name="remote_dir">Cloud directory name (empty = root)</string>
-    <string name="test_conn">Test connection</string>
-    <string name="save_account">Save account</string>
-    <string name="how_get_pw">How to get app password: Jianguoyun site -> Account info -> Security options -> Add app password.</string>
 
     <!-- settings -->
-    <string name="settings_title">Settings</string>
     <string name="bot_settings">Bot settings</string>
     <string name="buy_bookmark">Buy covenant bookmarks</string>
     <string name="buy_medal">Buy mystic medals</string>
@@ -70,42 +49,21 @@
     <string name="speed_mult">Speed multiplier 1-3x (faster cycles, same rewards)</string>
     <string name="ocr_engine">Recognition engine</string>
     <string name="ocr_engine_yolo">YOLO Vision</string>
-    <string name="appearance_m3">Appearance (Material-Theme)</string>
     <string name="appearance_dark">Steam · Dark cards</string>
     <string name="appearance_oled">Steam · OLED pure black</string>
     <string name="appearance_ba">Blue Archive · Bright academy</string>
-    <string name="ocr_engine_note">builtin = stable default; GPU = faster on good phones; OpenCV = Rem-style template match (safest against missing an item)</string>
-    <string name="ocr_engine_builtin">Built-in template (recommended, default, stable)</string>
-    <string name="ocr_engine_gpu">GPU recognition (high power, for good phones)</string>
-    <string name="ocr_engine_opencv">OpenCV (Rem assistant same engine)</string>
-    <string name="gpu_capture">GPU capture frame rate</string>
-    <string name="gpu_capture_note">When the GPU engine is on, the shop screen is sampled at this rate and matched on the GPU. 60 fps catches an item the instant it appears (higher GPU load); 30 fps halves the load.</string>
     <string name="changelog">Changelog</string>
-    <string name="save_bot">Save bot settings</string>
     <string name="humanize_settings">Human-like behavior (lower detection risk)</string>
     <string name="delay_min">Delay min (ms)</string>
     <string name="delay_max">Delay max (ms)</string>
     <string name="tap_offset">Tap offset px (0-4)</string>
     <string name="random_rests">Random rests</string>
     <string name="rest_every">Rest every N actions</string>
-    <string name="save_humanize">Save humanize settings</string>
-    <string name="about">About</string>
-    <string name="about_text">E7 Shop Assistant v2.1.0 - non-commercial personal use</string>
     <string name="language">Language</string>
     <string name="lang_system">Follow system</string>
     <string name="lang_chinese">Chinese</string>
     <string name="lang_english">English</string>
-    <string name="top_logo">Top logo</string>
-    <string name="logo_text_mode">Gold \"EPIC SEVEN\" text</string>
-    <string name="logo_official_mode">Official Epic Seven logo image</string>
-    <string name="logo_custom_mode">Custom logo image</string>
     <string name="appearance">Appearance</string>
-    <string name="bg_image_path">Custom background image path (background only, top/bottom unchanged; empty = default)</string>
-    <string name="bg_hint">/sdcard/Pictures/bg.png</string>
-    <string name="pick_bg">Pick</string>
-    <string name="save_appearance">Save appearance</string>
-    <string name="appearance_saved">Appearance saved</string>
-        <string name="anim_settings">Animation settings</string>
     <string name="show_splash">Show entry animation</string>
     <string name="log_level">Run log detail</string>
     <string name="floaty_reset_pos">Floaty position reset</string>
@@ -127,8 +85,6 @@
     <string name="anim_easing_expo">Expo</string>
     <string name="anim_easing_circ">Circ</string>
     <string name="floaty_title">Floating window</string>
-    <string name="floaty_label">Show floating window while running</string>
-    <string name="floaty_perm_needed">Please grant "Display over other apps" permission</string>
     <string name="float_start">Start</string>
     <string name="float_pause">Pause</string>
     <string name="float_stop">Stop</string>
@@ -157,10 +113,6 @@
     <string name="float_model_na">Model missing</string>
     <string name="float_shot_ok">Shot OK ×%1$d</string>
     <string name="float_shot_fail">Shot failed</string>
-    <string name="update_title">Update</string>
-    <string name="check_update">Check for update</string>
-    <string name="update_latest">Already the latest version</string>
-    <string name="update_checking">Checking...</string>
 
     <!-- nav -->
     <string name="nav_home">Run</string>
@@ -173,25 +125,15 @@
     <string name="dlg_risk_msg">Auto-farming the shop is game automation.\nIt may violate Epic Seven ToS and risk a ban.\n\nThis tool uses human-like behavior (random delays, tap offsets, random rests) to lower detection chance, but cannot guarantee 100% safety.\n\nConfirm that you fully understand and accept the risk.\nFarming is only allowed after confirmation.</string>
     <string name="dlg_accept_risk">I accept the risk</string>
     <string name="dlg_cancel">Cancel</string>
-    <string name="dlg_res_title">Enter current resources</string>
-    <string name="dlg_res_msg">Used for budget guard. Gold:</string>
-    <string name="dlg_gold_hint">Current gold (0 = skip)</string>
-    <string name="toast_already_running">Already running</string>
-    <string name="toast_not_running">Not running</string>
     <string name="toast_resumed">Resumed</string>
     <string name="toast_paused">Paused</string>
     <string name="toast_stopping">Stopping...</string>
-    <string name="toast_risk_confirmed">Risk confirmed</string>
     <string name="toast_started">Started. Switch to the game shop screen.</string>
     <string name="toast_risk_required">Risk warning not confirmed - cannot run</string>
-    <string name="toast_templates_required">Icon templates not captured yet</string>
     <string name="err_sky_budget">Skystone budget reached</string>
     <string name="err_net_error">Network dialog handled — continuing</string>
     <string name="err_gold_cap">Gold spend cap reached (%1$s spent) - stopped</string>
-    <string name="err_bookmark_cap">Bookmark holding cap reached (%1$d bookmarks) - stopped</string>
-    <string name="err_medal_cap">Medal holding cap reached (%1$d medals) - stopped</string>
     <!-- equipment score -->
-    <string name="score_entry">Equipment score (from screenshot)</string>
     <string name="score_title">Equipment Score</string>
     <string name="score_pick">Pick a gear screenshot</string>
     <string name="score_analyzing">Analyzing…</string>
@@ -200,22 +142,7 @@
     <string name="score_no_stats">No stats recognized. Use a clear screenshot of the gear detail page.</string>
     <string name="score_ocr_failed">Text recognition failed</string>
     <string name="toast_enable_accessibility">Enable the accessibility service first</string>
-    <string name="toast_bind_cloud_first">Bind Jianguoyun account on User page first</string>
-    <string name="toast_account_saved">Account saved</string>
-    <string name="toast_bot_saved">Bot settings saved</string>
-    <string name="toast_human_saved">Humanize settings saved</string>
-    <string name="toast_lang_changed">Language changed</string>
-    <string name="tpl_drag_hint_bookmark">Drag a box around the bookmark icon, release to save. Double-tap = cancel.</string>
-    <string name="tpl_drag_hint_medal">Drag a box around the mystic medal icon, release to save. Double-tap = cancel.</string>
-    <string name="tpl_saved">Template saved!</string>
-    <string name="tpl_save_failed">Save failed</string>
-    <string name="tpl_too_small">Box too small, try again</string>
-    <string name="tpl_cancelled">Cancelled</string>
-    <string name="tpl_no_service">Accessibility service not enabled</string>
-    <string name="tpl_shot_failed">Screenshot failed</string>
     <string name="view_shot">View last screenshot (what the bot sees)</string>
-    <string name="diag_shot_ok">Screenshot OK</string>
-    <string name="diag_shot_fail">Screenshot FAILED - the bot cannot see</string>
 
     <!-- V1 UI + engine messages -->
     <string name="svc_not_enabled">Accessibility service not enabled</string>
@@ -245,8 +172,6 @@
     <string name="wd_upload">Upload</string>
     <string name="wd_download">Download</string>
     <string name="wd_test">Test</string>
-    <string name="wd_saved">WebDAV settings saved</string>
-    <string name="wd_save">Save WebDAV settings</string>
     <string name="wd_ok_connection">Connection OK</string>
     <string name="wd_err_auth">Wrong account or app password (401)</string>
     <string name="wd_err_http">HTTP %1$d</string>
@@ -255,6 +180,7 @@
     <string name="wd_err_upload">Upload failed HTTP %1$d</string>
     <string name="wd_ok_download">Download success</string>
     <string name="wd_err_no_file">No records file in cloud yet</string>
+    <string name="wd_err_too_large">Cloud file too large (&gt;%1$d KB) — import refused</string>
     <string name="wd_err_download">Download failed HTTP %1$d</string>
     <string name="wd_err_insecure">Server must use HTTPS - http:// would send your app password in cleartext</string>
     <string name="general">General</string>
@@ -266,14 +192,9 @@
     <string name="splash_credit">heyyo x E7SA</string>
     <string name="err_recover_refresh_dlg">Refresh dialog detected - closing it safely</string>
     <string name="err_recover_buy_dlg">Purchase dialog detected - cancelling it</string>
-    <string name="err_wait_timeout">Shop screen not detected for a long time - stopped</string>
     <string name="err_dialog_stuck">Dialog cannot be closed automatically - please handle it manually</string>
     <string name="err_no_confirm">Confirm button not located - cancelling the refresh dialog</string>
     <string name="err_exception">Error: %1$s</string>
-    <string name="err_slot6_shot">Slot-6 check: screenshot failed - retrying (no refresh)</string>
-    <string name="err_recheck_shot">Recheck: screenshot failed - retrying (no refresh)</string>
-    <string name="err_swipe_shot">Swipe check: screenshot failed - retrying (no refresh)</string>
-    <string name="err_row_buy_failed">Row purchase failed x%1$d (%2$s@%3$d) - skipping this row</string>
     <string name="err_row_wrong_target">Dialog does not match target (%1$s@%2$d) - tapped the wrong row, giving up this row</string>
     <string name="err_refresh_unverified">Refresh not verified (shop list unchanged) - counted but not scrolling, will re-observe</string>
     <string name="err_refresh_shot">Screenshot before refresh failed - retrying (no refresh)</string>

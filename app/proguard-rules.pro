@@ -15,7 +15,15 @@
 -keep class rikka.shizuku.Shizuku { *; }
 
 # ---- OkHttp / coroutines used by the WebDAV sync ----
--keep class okhttp3.** { *; }
+# 2026-09-19：原先的 `-keep class okhttp3.** { *; }` 让 R8 对整库失效 —— 无法裁剪，
+# 也让人分辨不出"哪些类真的需要保活"。OkHttp 在本项目里是**直接调用**（无反射、无
+# 序列化框架），其 AAR 自带 consumer 规则；这里只保活 App 直接引用的类型。
+-keep class okhttp3.OkHttpClient { *; }
+-keep class okhttp3.Request { *; }
+-keep class okhttp3.Response { *; }
+-keep class okhttp3.ResponseBody { *; }
+-keep class okhttp3.RequestBody { *; }
+-keep class okhttp3.MediaType { *; }
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn javax.annotation.**

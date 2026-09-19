@@ -1,0 +1,1236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.9.2" type="baseline" client="gradle" dependencies="false" name="AGP (8.9.2)" variant="all" version="8.9.2">
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="        findViewById&lt;TextView>(R.id.scoreTotal).text = String.format(&quot;%.1f&quot;, result.total)"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="110"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="        findViewById&lt;TextView>(R.id.scoreTotal).text = String.format(&quot;%.1f&quot;, result.total)"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="110"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                val valText = if (line.isPercent) String.format(&quot;%.0f%%&quot;, line.value)"
+        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="125"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                else String.format(&quot;%.0f&quot;, line.value)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="126"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="            n >= 100000000 -> String.format(&quot;%.2f亿&quot;, n / 100000000.0)"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/RecordStore.kt"
+            line="222"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="            n >= 10000 -> String.format(&quot;%.1f万&quot;, n / 10000.0)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/RecordStore.kt"
+            line="223"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="CustomSplashScreen"
+        message="The application should not provide its own launch screen"
+        errorLine1="class SplashActivity : AppCompatActivity() {"
+        errorLine2="      ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/SplashActivity.kt"
+            line="19"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ProtectedPermissions"
+        message="Permission is only granted to system apps"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.WRITE_SECURE_SETTINGS&quot; />"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="18"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="RedundantLabel"
+        message="Redundant label can be removed"
+        errorLine1="            android:label=&quot;@string/app_name&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="36"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="RedundantLabel"
+        message="Redundant label can be removed"
+        errorLine1="            android:label=&quot;@string/app_name&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.8.7"
+        errorLine1="    implementation(&quot;androidx.lifecycle:lifecycle-runtime-ktx:2.8.4&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="87"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of dev.rikka.shizuku:api than 12.1.0 is available: 13.1.5"
+        errorLine1="    implementation(&quot;dev.rikka.shizuku:api:12.1.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="107"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of dev.rikka.shizuku:provider than 12.1.0 is available: 13.1.5"
+        errorLine1="    implementation(&quot;dev.rikka.shizuku:provider:12.1.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="108"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="StringFormatInvalid"
+        message="Incorrect formatting string `dlg_risk_msg`; missing conversion character in &apos;`% s`&apos;?"
+        errorLine1="    &lt;string name=&quot;dlg_risk_msg&quot;>Auto-farming the shop is game automation.\nIt may violate Epic Seven ToS and risk a ban.\n\nThis tool uses human-like behavior (random delays, tap offsets, random rests) to lower detection chance, but cannot guarantee 100% safety.\n\nConfirm that you fully understand and accept the risk.\nFarming is only allowed after confirmation.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="125"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StringFormatInvalid"
+        message="Incorrect formatting string `dlg_risk_msg`; missing conversion character in &apos;`% s`&apos;?"
+        errorLine1="    &lt;string name=&quot;dlg_risk_msg&quot;>Auto-farming the shop is game automation.\nIt may violate Epic Seven ToS and risk a ban.\n\nThis tool uses human-like behavior (random delays, tap offsets, random rests) to lower detection chance, but cannot guarantee 100% safety.\n\nConfirm that you fully understand and accept the risk.\nFarming is only allowed after confirmation.&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="125"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StringFormatMatches"
+        message="Suspicious argument type for formatting argument #1 in `err_gold_cap`: conversion is `s`, received `long` (argument #2 in method call) (Did you mean formatting character `d`, &apos;o&apos; or `x`?)"
+        errorLine1="            return handledRows.any { kotlin.math.abs(it - y) &lt; tol }"
+        errorLine2="                                                                                        ~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ShopAccessibilityService.kt"
+            line="614"
+            column="89"/>
+        <location
+            file="src/main/res/values-zh/strings.xml"
+            line="134"
+            column="5"
+            message="Conflicting argument declaration here"/>
+    </issue>
+
+    <issue
+        id="StringFormatMatches"
+        message="Suspicious argument type for formatting argument #1 in `err_gold_cap`: conversion is `s`, received `long` (argument #2 in method call) (Did you mean formatting character `d`, &apos;o&apos; or `x`?)"
+        errorLine1="            return handledRows.any { kotlin.math.abs(it - y) &lt; tol }"
+        errorLine2="                                                                                        ~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ShopAccessibilityService.kt"
+            line="614"
+            column="89"/>
+        <location
+            file="src/main/res/values/strings.xml"
+            line="135"
+            column="5"
+            message="Conflicting argument declaration here"/>
+    </issue>
+
+    <issue
+        id="StringFormatCount"
+        message="Inconsistent number of arguments in formatting string `dlg_risk_msg`; found both 0 here and 1 in values/strings.xml"
+        errorLine1="    &lt;string name=&quot;dlg_risk_msg&quot;>自动刷商店属于游戏自动化行为，\n可能违反第七史诗服务条款，存在封号风险。\n\n本工具已内置拟人化操作（随机延迟、点击偏移、\n随机休息）以降低被检测的概率，\n但无法保证 100% 安全。\n\n请确认你已完全了解并自愿承担此风险，\n确认后才会允许运行。&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-zh/strings.xml"
+            line="124"
+            column="5"/>
+        <location
+            file="src/main/res/values/strings.xml"
+            line="125"
+            column="5"
+            message="Conflicting number of arguments (1) here"/>
+    </issue>
+
+    <issue
+        id="ChromeOsAbiSupport"
+        message="Missing x86_64 ABI support for ChromeOS"
+        errorLine1="            abiFilters += listOf(&quot;arm64-v8a&quot;, &quot;armeabi-v7a&quot;)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="19"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="SetJavaScriptEnabled"
+        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully"
+        errorLine1="                            // 2026-09-19：更新日志是**本地生成且全文转义**的 HTML，不需要 JS。"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/MainActivity.kt"
+            line="347"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; `SDK_INT` is always >= 30"
+        errorLine1="        val bmp = if (Build.VERSION.SDK_INT >= 30) takeScreenshotInternal() else null"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/device/DeviceIo.kt"
+            line="47"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 30. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var logoVersion by remember { mutableStateOf(0) }"
+        errorLine2="                                  ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ui/ThemeSteam.kt"
+            line="350"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var bgVersion by remember { mutableStateOf(0) }"
+        errorLine2="                                ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ui/ThemeSteam.kt"
+            line="939"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var logoVersion by remember { mutableStateOf(0) }"
+        errorLine2="                                  ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ui/ThemeSteam.kt"
+            line="940"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var strength by remember { mutableStateOf(cfg.animEasingStrength) }"
+        errorLine2="                               ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ui/ThemeSteam.kt"
+            line="1150"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/bg_dark` with a theme that also paints a background (inferred theme is `@style/Theme_E7Shop`)"
+        errorLine1="    android:background=&quot;@color/bg_dark&quot;"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_equipment_score.xml"
+            line="5"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="Overdraw"
+        message="Possible overdraw: Root element paints background `@color/bg_dark` with a theme that also paints a background (inferred theme is `@style/Theme_E7Shop`)"
+        errorLine1="    android:background=&quot;@color/bg_dark&quot;>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_splash.xml"
+            line="5"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.bottom_nav_item` appears to be unused"
+        errorLine1="&lt;selector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/color/bottom_nav_item.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.bg_card_light` appears to be unused"
+        errorLine1="    &lt;color name=&quot;bg_card_light&quot;>#262D38&lt;/color> &lt;!-- elevated card -->"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="15"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.bg_oled` appears to be unused"
+        errorLine1="    &lt;color name=&quot;bg_oled&quot;>#000000&lt;/color>       &lt;!-- OLED pure black -->"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="17"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.gold_dark` appears to be unused"
+        errorLine1="    &lt;color name=&quot;gold_dark&quot;>#6B4F1A&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="28"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.cyan` appears to be unused"
+        errorLine1="    &lt;color name=&quot;cyan&quot;>#9DCBFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="29"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.success` appears to be unused"
+        errorLine1="    &lt;color name=&quot;success&quot;>#A6D189&lt;/color>   &lt;!-- M3 tone -->"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="37"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.warning` appears to be unused"
+        errorLine1="    &lt;color name=&quot;warning&quot;>#E5C890&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="38"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.info` appears to be unused"
+        errorLine1="    &lt;color name=&quot;info&quot;>#99C9E8&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="40"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.divider` appears to be unused"
+        errorLine1="    &lt;color name=&quot;divider&quot;>#2A313B&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="43"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.white` appears to be unused"
+        errorLine1="    &lt;color name=&quot;white&quot;>#FFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="46"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.color.black` appears to be unused"
+        errorLine1="    &lt;color name=&quot;black&quot;>#000000&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/colors.xml"
+            line="47"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.style.Theme_E7Shop_OLED` appears to be unused"
+        errorLine1="    &lt;style name=&quot;Theme.E7Shop.OLED&quot; parent=&quot;Theme.E7Shop&quot;>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/themes.xml"
+            line="27"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UselessParent"
+        message="This `LinearLayout` layout or its `FrameLayout` parent is unnecessary; transfer the `background` attribute to the other view"
+        errorLine1="    &lt;LinearLayout"
+        errorLine2="     ~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_splash.xml"
+            line="7"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;speed_mult&quot;>运行速度倍数 1-3（越快循环越快，收益相同）&lt;/string>"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-zh/strings.xml"
+            line="49"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;speed_mult&quot;>Speed multiplier 1-3x (faster cycles, same rewards)&lt;/string>"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="49"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;tap_offset&quot;>点击偏移像素(0-4)&lt;/string>"
+        errorLine2="                              ~~~~~~~~~~~">
+        <location
+            file="src/main/res/values-zh/strings.xml"
+            line="58"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="TypographyDashes"
+        message="Replace &quot;-&quot; with an &quot;en dash&quot; character (–, &amp;#8211;) ?"
+        errorLine1="    &lt;string name=&quot;tap_offset&quot;>Tap offset px (0-4)&lt;/string>"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="59"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;checking&quot;>Checking shop...&lt;/string>"
+        errorLine2="                            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="9"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;buying&quot;>Target found! Buying...&lt;/string>"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="10"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;refreshing&quot;>Refreshing shop...&lt;/string>"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;resting&quot;>Resting...&lt;/string>"
+        errorLine2="                           ~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="12"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;waiting_game&quot;>Waiting for Epic Seven shop screen...&lt;/string>"
+        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="13"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;toast_stopping&quot;>Stopping...&lt;/string>"
+        errorLine2="                                  ~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="130"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                secrets.edit().putString(&quot;wdPassword&quot;, legacy).apply()"
+        errorLine2="                ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="45"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            sp.edit().remove(&quot;wdPassword&quot;).apply()"
+        errorLine2="            ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                secrets.edit().putString(&quot;wdAccount&quot;, legacyAcc).apply()"
+        errorLine2="                ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="53"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="            sp.edit().remove(&quot;wdAccount&quot;).apply()"
+        errorLine2="            ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="55"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;buyBookmark&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="80"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;buyMedal&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="84"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;maxSkystones&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="89"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;bookmarkCap&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="97"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;medalCap&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="101"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putLong(&quot;goldSpendCap&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="106"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;ocrEngine&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="115"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;clickLogic&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="125"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;speedMult&quot;, v.coerceIn(1, 3)).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="134"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;delayMin&quot;, v.coerceIn(DELAY_MIN_MS, DELAY_MAX_MS)).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="146"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;delayMax&quot;, v.coerceIn(DELAY_MIN_MS, DELAY_MAX_MS)).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="150"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;accExemptFromAutoOff&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="166"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;offsetPx&quot;, v.coerceIn(0, TAP_OFFSET_MAX_PX)).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="177"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;randomRest&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="181"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;sleepMode&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="195"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;autoLockOnDone&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="208"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;restEvery&quot;, v.coerceIn(5, 100)).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="213"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putFloat(&quot;swipeCenterX&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="221"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putFloat(&quot;swipeTopY&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="225"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putFloat(&quot;swipeBottomY&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="229"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;riskAccepted&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="234"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;appLanguage&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="239"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;appearance&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="244"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;showSplash&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="249"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;logLevel&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="264"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;animEasing&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="273"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;animEasingVariant&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="278"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putInt(&quot;animEasingStrength&quot;, v.coerceIn(0, 100)).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="283"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;logoMode&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="288"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;customLogoPath&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="293"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;bgImage&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="299"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putBoolean(&quot;floatyEnabled&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="304"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;floatyLayout&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="319"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;wdServer&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="324"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = secrets.edit().putString(&quot;wdAccount&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="335"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = secrets.edit().putString(&quot;wdPassword&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="340"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        set(v) = sp.edit().putString(&quot;wdRemoteDir&quot;, v).apply()"
+        errorLine2="                 ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/AppConfig.kt"
+            line="344"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.get` instead?"
+        errorLine1="                if (match(bmp.getPixel(x, y))) hit++"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/bot/ClickPlanner.kt"
+            line="91"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.get` instead?"
+        errorLine1="                if (match(bmp.getPixel(x, y))) {"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/bot/ClickPlanner.kt"
+            line="112"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="        if (cfg.logoMode == &quot;custom&quot; &amp;&amp; cfg.customLogoPath.isNotEmpty()) {"
+        errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/MainActivity.kt"
+            line="570"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="    if (src.isEmpty()) return null"
+        errorLine2="                                                                   ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/MainActivity.kt"
+            line="585"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `Bitmap.get` instead?"
+        errorLine1="                val p = bmp.getPixel(x, y)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/bot/Recognition.kt"
+            line="302"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        sp.edit().putString(&quot;totals&quot;, o.toString()).apply()"
+        errorLine2="        ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/RecordStore.kt"
+            line="66"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="        sp.edit().putString(&quot;sessions&quot;, arr.toString()).apply()"
+        errorLine2="        ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/RecordStore.kt"
+            line="93"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `SharedPreferences.edit` instead?"
+        errorLine1="                sp.edit().putString(&quot;sessions&quot;, sessions.toString()).apply()"
+        errorLine2="                ~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/data/RecordStore.kt"
+            line="193"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                    Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ui/ThemeBlueArchive.kt"
+            line="969"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="UseKtx"
+        message="Use the KTX extension function `String.toUri` instead?"
+        errorLine1="                                    Uri.parse(&quot;package:${context.packageName}&quot;)"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/ui/ThemeSteam.kt"
+            line="899"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="`onTouch` lambda should call `View#performClick` when a click is detected"
+        errorLine1="            v.setOnTouchListener { _, ev ->"
+        errorLine2="                                 ^">
+        <location
+            file="src/main/java/com/e7/shop/ui/FloatyController.kt"
+            line="1064"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="`onTouch` lambda should call `View#performClick` when a click is detected"
+        errorLine1="    private fun dragListener(host: FloatyHost): View.OnTouchListener {"
+        errorLine2="                                    ^">
+        <location
+            file="src/main/java/com/e7/shop/ui/RailFloatySkin.kt"
+            line="425"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            getString(R.string.score_stats) + &quot; (${result.lines.size})&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="109"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            getString(R.string.score_stats) + &quot; (${result.lines.size})&quot;"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="109"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="                text = &quot;${line.name}  +$valText   =  ${line.points} pts&quot;"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="127"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="                text = &quot;${line.name}  +$valText   =  ${line.points} pts&quot;"
+        errorLine2="                                                                   ~~~~">
+        <location
+            file="src/main/java/com/e7/shop/score/EquipmentScoreActivity.kt"
+            line="127"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;←&quot;, should use `@string` resource"
+        errorLine1="            android:text=&quot;←&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_equipment_score.xml"
+            line="22"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;E7&quot;, should use `@string` resource"
+        errorLine1="            android:text=&quot;E7&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_equipment_score.xml"
+            line="40"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="HardcodedText"
+        message="Hardcoded string &quot;--&quot;, should use `@string` resource"
+        errorLine1="            android:text=&quot;--&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/layout/activity_equipment_score.xml"
+            line="87"
+            column="13"/>
+    </issue>
+
+</issues>

@@ -487,22 +487,21 @@ class YoloEngine : RecognitionEngine {
      */
     override fun hasIconFast(bmp: Bitmap): Boolean {
         if (sleepMode) return true
-        val boxes = try { YoloDet.detect(bmp) } catch (e: Throwable) {
-            // 快速探测失败 → 返回 false → 整屏会被跳过（漏买方向），必须留痕
-            notePerceptionFailure("yolo-fast", yoloFailCount, e); emptyList()
-        }
+        val boxes = YoloDet.detect(bmp)
+        // 快速探测失败 → 返回 false → 整屏会被跳过（漏买方向），必须留痕。
+        // 失败在 YoloDet 内部已被吞成 emptyList，所以这里用 takeFailure() 取走留痕 ——
+        // 原来的 try/catch 是死代码（2026-09-19 修复）。
+        YoloDet.takeFailure()?.let { notePerceptionFailure("yolo-fast", yoloFailCount, it) }
         return boxes.any { it.isIcon && it.prob >= Tuning.ICON_CONF_FAST }
     }
 
     override fun analyze(bmp: Bitmap): DetectionResult {
         val t0 = System.currentTimeMillis()
-        val lines = try { PpOcr.recognize(bmp) } catch (e: Throwable) {
-            notePerceptionFailure("ocr", ocrFailCount, e); emptyList()
-        }
+        val lines = PpOcr.recognize(bmp)
+        PpOcr.takeFailure()?.let { notePerceptionFailure("ocr", ocrFailCount, it) }
         val t1 = System.currentTimeMillis()
-        val boxes = try { YoloDet.detect(bmp) } catch (e: Throwable) {
-            notePerceptionFailure("yolo", yoloFailCount, e); emptyList()
-        }
+        val boxes = YoloDet.detect(bmp)
+        YoloDet.takeFailure()?.let { notePerceptionFailure("yolo", yoloFailCount, it) }
         val t2 = System.currentTimeMillis()
         val scene = sceneOf(lines)
         // 候选 = YOLO 图标框 ∪ OCR 商品名行（按行合并，冲突剔除）
@@ -551,9 +550,8 @@ class TraditionalEngine : RecognitionEngine {
 
     override fun analyze(bmp: Bitmap): DetectionResult {
         val t0 = System.currentTimeMillis()
-        val lines = try { PpOcr.recognize(bmp) } catch (e: Throwable) {
-            notePerceptionFailure("ocr", ocrFailCount, e); emptyList()
-        }
+        val lines = PpOcr.recognize(bmp)
+        PpOcr.takeFailure()?.let { notePerceptionFailure("ocr", ocrFailCount, it) }
         val scene = sceneOf(lines)
         val raw = ArrayList<Candidate>()
 

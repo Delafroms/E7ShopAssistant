@@ -37,20 +37,28 @@ class ShopAccessibilityService : AccessibilityService() {
 
     enum class Stage { IDLE, CHECKING, BUYING, REFRESHING, RESTING, PAUSED, WAITING }
 
+    /**
+     * 会话状态快照（写方 = bot 线程经 publish；读方 = 主线程 UI / 2 秒轮询 / 设置页）。
+     *
+     * **每个字段都是 @field:Volatile**（2026-09-19 修复）：原实现是普通 var，
+     * 主线程可能读到"写了一半"的值 —— 表现为界面偶尔自相矛盾
+     * （例如"引擎在跑、阶段却还是 IDLE"）。@Volatile 保证单个字段的可见性与原子性；
+     * 跨字段的一致性由 publish 把**拷贝**交给监听者来保证（见 publish 实现）。
+     */
     data class BotState(
-        var running: Boolean = false,
-        var paused: Boolean = false,
-        var stage: Stage = Stage.IDLE,
-        var lastError: String = "",
-        var bookmarksGot: Int = 0,
-        var medalsGot: Int = 0,
-        var refreshes: Int = 0,
-        var skystonesSpent: Int = 0,
-        var goldSpent: Long = 0,
-        var startedAt: Long = 0,
-        var shotOk: Boolean = true,
-        var shotCount: Int = 0,
-        var matchScore: Double = -1.0
+        @field:Volatile var running: Boolean = false,
+        @field:Volatile var paused: Boolean = false,
+        @field:Volatile var stage: Stage = Stage.IDLE,
+        @field:Volatile var lastError: String = "",
+        @field:Volatile var bookmarksGot: Int = 0,
+        @field:Volatile var medalsGot: Int = 0,
+        @field:Volatile var refreshes: Int = 0,
+        @field:Volatile var skystonesSpent: Int = 0,
+        @field:Volatile var goldSpent: Long = 0,
+        @field:Volatile var startedAt: Long = 0,
+        @field:Volatile var shotOk: Boolean = true,
+        @field:Volatile var shotCount: Int = 0,
+        @field:Volatile var matchScore: Double = -1.0
     )
 
     companion object {
@@ -201,6 +209,19 @@ class ShopAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
+    /**
+     * 服务被**解绑**（用户在系统设置里关掉无障碍、或系统回收服务）时同样清空单例
+     * （2026-09-19 修复）。
+     *
+     * 为什么必须做：`isEnabled()` 只看 `instance != null`。旧实现只在 onDestroy 里置空，
+     * 而 onUnbind 到 onDestroy 之间（某些 ROM 上 onDestroy 甚至不调用）界面仍显示"已启用"
+     * → 玩家点开始后服务早已不在，机器人静默不动作 —— 另一种形态的假开关。
+     */
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        if (instance === this) instance = null
+        return super.onUnbind(intent)
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* not used */ }
 
     override fun onInterrupt() { /* not used */ }
@@ -209,7 +230,7 @@ class ShopAccessibilityService : AccessibilityService() {
 
     fun addStateListener(l: (BotState) -> Unit) {
         listeners.add(l)
-        l(state)
+        l(state.copy())   // 首次回调同样给快照，不给可变引用（2026-09-19）
     }
 
     fun removeStateListener(l: (BotState) -> Unit) {
@@ -218,8 +239,11 @@ class ShopAccessibilityService : AccessibilityService() {
 
     private fun publish(patch: (BotState) -> Unit) {
         patch(state)
+        // 监听者拿到的是**快照拷贝**（2026-09-19 修复）：原实现把可变的 state 直接交给主线程，
+        // 主线程遍历 UI 的过程中 bot 线程还在改它 —— 一次刷新可能读到两个时刻的字段组合。
+        val snapshot = state.copy()
         mainHandler.post {
-            for (l in listeners) l(state)
+            for (l in listeners) l(snapshot)
             // the floating ball is owned by the SERVICE (not the Activity):
             // OEM "game space" reclamation of a backgrounded Activity must
             // never kill the ball while the bot runs
@@ -260,14 +284,9 @@ class ShopAccessibilityService : AccessibilityService() {
         sessionCompleted = false
         // 保持屏幕常亮：熄屏会让无障碍截图拿不到画面，机器人随即停摆
         acquireRunWakeLock()
-        // 会话分隔标记：便于在长日志里定位"这一轮从哪开始"
-        runLog.level = cfg.logLevel
-        runLog.sessionStart(
-            "engine=${cfg.ocrEngine} click=${cfg.clickLogic} sleep=${cfg.sleepMode} " +
-                "goldCap=${cfg.goldSpendCap} skyBudget=${cfg.maxSkystones} log=${cfg.logLevel} " +
-                "screen=${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}"
-        )
         // 会话残留（handledRows）不在这里清 —— 见下面 bot 线程开头的说明
+        // 日志会话初始化也不在这里：它要 listFiles + delete（磁盘 I/O），
+        // 主线程做这个属于无谓阻塞（2026-09-19 修复）→ 见 bot 线程开头的 ①a。
         publish {
             it.running = true
             it.paused = false
@@ -289,6 +308,14 @@ class ShopAccessibilityService : AccessibilityService() {
             // ① 等旧线程收尾（最多 1.5s）：它已收到 interrupt，且阶段内的长等待
             //    现在每轮都检查停止标志，通常几十毫秒就退出
             joinQuietly(previous, 1500)
+            // ①a 日志会话初始化（2026-09-19 修复）：会做 listFiles + delete（磁盘 I/O），
+            //     原先在主线程执行。放在 join 之后，保证上一轮线程不会再往新会话文件里写。
+            runLog.level = cfg.logLevel
+            runLog.sessionStart(
+                "engine=${cfg.ocrEngine} click=${cfg.clickLogic} sleep=${cfg.sleepMode} " +
+                    "goldCap=${cfg.goldSpendCap} skyBudget=${cfg.maxSkystones} log=${cfg.logLevel} " +
+                    "screen=${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}"
+            )
             // ①b 清空会话残留：**必须在 bot 线程做**（2026-09-18 修复）。
             //     放在主线程时，它与旧线程的 handledAdd/handledContains 并发 —— 即使
             //     集合本身线程安全，旧线程也仍可能把上一轮的行号补回来（逻辑竞态）。
@@ -415,6 +442,9 @@ class ShopAccessibilityService : AccessibilityService() {
      *
      * 不依赖"无障碍手势能否重置锁屏计时"——那个行为各 ROM 不一致，不可靠。
      */
+    @Suppress("DEPRECATION")   // SCREEN_DIM_WAKE_LOCK 在 API 33+ 标记弃用，但服务里没有
+                               // 等价的替代（FLAG_KEEP_SCREEN_ON 只对 Activity 窗口有效），
+                               // 行为明确且省电（允许变暗），保留并显式压制警告。
     private fun acquireRunWakeLock() {
         try {
             if (runWakeLock?.isHeld == true) return

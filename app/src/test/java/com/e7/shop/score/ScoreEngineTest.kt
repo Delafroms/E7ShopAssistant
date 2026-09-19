@@ -145,4 +145,15 @@ class ScoreEngineTest {
         val s = ScoreEngine.parseLine("速度 4.5")
         assertEquals(9.0, s!!.points, 0.01)
     }
+
+    @Test
+    fun case_insensitive_match_does_not_shift_the_index() {
+        // 回归测试（2026-09-19）：旧版在 lowercase() 后的串上取下标、却拿它去切**原串**。
+        // 'İ'（U+0130）小写化后是两个 code unit，索引整体右移一位 →
+        // 尾巴少切一位数字，分数**静默**算错（123 被读成 23），而且不会抛任何异常。
+        val s = ScoreEngine.parseLine("İ Speed123")
+        assertNotNull("带 İ 的行仍应被识别", s)
+        assertEquals("数值不能被索引偏移吃掉一位", 123.0, s!!.value, 0.01)
+        assertEquals(246.0, s.points, 0.01)
+    }
 }

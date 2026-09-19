@@ -165,13 +165,24 @@ class RecordStore(context: Context) {
             val ver = root.optInt("schemaVersion", 1)
             val totals = root.optJSONObject("totals") ?: return false
             val t = loadTotals()
-            t.bookmarksGot = totals.optInt("bookmarksGot")
-            t.medalsGot = totals.optInt("medalsGot")
-            t.refreshes = totals.optInt("refreshes")
-            t.skystonesSpent = totals.optInt("skystonesSpent")
-            t.goldSpent = totals.optLong("goldSpent")
-            t.runMs = totals.optLong("runMs")
-            t.runs = totals.optInt("runs")
+            // 范围校验（2026-09-19 修复）：旧版把云端 JSON 的数值直接写进本地 ——
+            // 一个负数（或被人为改过的超大值）会污染统计，而统计正是"零漏买/零误买"的判据。
+            // 任何一项越界即**整体拒绝**导入（宁可不导，也不写入不可信的账）。
+            val counters = intArrayOf(
+                totals.optInt("bookmarksGot"), totals.optInt("medalsGot"), totals.optInt("refreshes"),
+                totals.optInt("skystonesSpent"), totals.optInt("runs")
+            )
+            if (counters.any { it < 0 || it > MAX_COUNTER }) return false
+            val gold = totals.optLong("goldSpent")
+            val runMs = totals.optLong("runMs")
+            if (gold < 0 || gold > MAX_GOLD || runMs < 0) return false
+            t.bookmarksGot = counters[0]
+            t.medalsGot = counters[1]
+            t.refreshes = counters[2]
+            t.skystonesSpent = counters[3]
+            t.runs = counters[4]
+            t.goldSpent = gold
+            t.runMs = runMs
             if (ver >= 2) {
                 t.todayMs = totals.optLong("todayMs", t.todayMs)
                 t.lastDate = totals.optString("lastDate", t.lastDate)
@@ -190,6 +201,10 @@ class RecordStore(context: Context) {
     companion object {
         /** 持久化 schema 版本：v1 = 无版本号（旧版）；v2 = 带 todayMs/lastDate。 */
         const val SCHEMA_VERSION = 2
+
+        /** 导入校验上限（2026-09-19）：任何一项超出即拒绝整份导入（防负数/被改过的文件）。 */
+        const val MAX_COUNTER = 10_000_000
+        const val MAX_GOLD = 1_000_000_000_000L
 
         fun fmtMs(ms: Long): String {
             if (ms <= 0) return "0m"

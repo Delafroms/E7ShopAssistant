@@ -1233,6 +1233,9 @@ internal fun StTextField(label: String, initial: String, isPassword: Boolean, on
         },
         label = { Text(label) },
         singleLine = true,
+        // 键盘类型也要跟着走（2026-09-19）：只有视觉遮挡时，输入法仍会把密码学进词库/联想。
+        keyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password)
+                         else KeyboardOptions.Default,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         shape = MaterialTheme.shapes.small,
         modifier = Modifier.fillMaxWidth()

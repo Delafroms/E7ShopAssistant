@@ -351,6 +351,9 @@ internal class RailFloatySkin(private val ctx: Context) : FloatySkin {
         rail = null
         panel = null
         statValues.clear()
+        // 2026-09-19 修复：statLabels 只 add 不 clear —— destroy 后仍持有整组 TextView
+        // （视图树已拆但引用还在，属泄漏；重建悬浮窗时会累积旧引用）。
+        statLabels.clear()
     }
 
     /* ==================== 工具 ==================== */
@@ -363,6 +366,10 @@ internal class RailFloatySkin(private val ctx: Context) : FloatySkin {
     private fun shortStage(full: String): String = when {
         full.isEmpty() -> "—"
         full.length <= 3 -> full
+        // 拉丁文本按"字符数"截断会截出无意义的碎片（"Checking shop..." → "Ch"）。
+        // 2026-09-19 修复：拉丁文本取**第一个词**（放不下时由 Text 自己用省略号收尾），
+        // CJK 仍取前 2 个字（46dp 竖轨正好放得下）。
+        full[0].code < 0x2E80 -> full.substringBefore(' ').take(10)
         else -> full.take(2)
     }
 

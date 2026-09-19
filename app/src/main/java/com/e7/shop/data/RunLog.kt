@@ -32,9 +32,9 @@ class RunLog(context: Context) {
     private val fmt = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
     private val lock = Any()
 
-    /** 是否启用（默认开；玩家可在设置里关掉以减少写入）。 */
-    @Volatile
-    var enabled: Boolean = true
+    // 2026-09-19：删除死字段 `enabled`。它的注释写着"玩家可在设置里关掉"，
+    // 但全仓库无人赋值、设置里也没有对应开关 —— 属于"代码里的假开关"。
+    // 日志量已经由 [level]（off/normal/detail/debug，设置页可见）控制，不再需要第二个开关。
 
     /** 当前详细度："off" | "normal" | "detail" | "debug"。 */
     @Volatile
@@ -56,7 +56,7 @@ class RunLog(context: Context) {
      *                 调用方按"这条日志有多重要"来标注，而不是自己去判断当前等级。
      */
     fun write(tag: String, msg: String, required: String = LEVEL_NORMAL) {
-        if (!enabled || !allows(required)) return
+        if (!allows(required)) return
         // 优先写本轮独立文件；未开始会话时退回固定文件
         val f = sessionFile ?: file ?: return
         synchronized(lock) {

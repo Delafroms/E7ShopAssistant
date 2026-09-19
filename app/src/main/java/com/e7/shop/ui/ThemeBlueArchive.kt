@@ -1152,6 +1152,8 @@ private fun BaTextField(label: String, initial: String, isPassword: Boolean, onV
         },
         label = { Text(label) },
         singleLine = true,
+        keyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password)
+                         else KeyboardOptions.Default,
         visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
         shape = BaShape,
         modifier = Modifier.fillMaxWidth()

@@ -31,6 +31,14 @@ class WebDavSync(private val cfg: AppConfig, private val ctx: Context? = null) {
 
     data class Result(val ok: Boolean, val message: String, val data: String? = null)
 
+    companion object {
+        /**
+         * 下载体积上限（2026-09-19）：统计 JSON 只有几十 KB，2MB 已经非常宽松；
+         * 超过即拒绝导入 —— 既防 OOM，也防"云端文件被换成别的东西"。
+         */
+        const val MAX_DOWNLOAD_BYTES = 2L * 1024 * 1024
+    }
+
     private fun msg(resId: Int, vararg args: Any): String =
         ctx?.getString(resId, *args) ?: resId.toString()
 
@@ -109,7 +117,24 @@ class WebDavSync(private val cfg: AppConfig, private val ctx: Context? = null) {
                 .build()
             client.newCall(req).execute().use { resp ->
                 when {
-                    resp.code == 200 -> Result(true, msg(R.string.wd_ok_download), resp.body?.string())
+                    resp.code == 200 -> {
+                        // 体积上限（2026-09-19 修复）：旧版直接 resp.body?.string() 把响应**整体**
+                        // 读进内存 —— 云端返回一个超大文件（或响应被替换）就能把 App OOM 掉。
+                        // 这里先看 Content-Length，再对 chunked 响应做限长读取，超限即拒绝。
+                        val body = resp.body
+                        val declared = body?.contentLength() ?: -1L
+                        if (declared > MAX_DOWNLOAD_BYTES) {
+                            Result(false, msg(R.string.wd_err_too_large, MAX_DOWNLOAD_BYTES / 1024))
+                        } else {
+                            val buf = okio.Buffer()
+                            body?.source()?.let { s -> s.read(buf, MAX_DOWNLOAD_BYTES + 1) }
+                            if (buf.size > MAX_DOWNLOAD_BYTES) {
+                                Result(false, msg(R.string.wd_err_too_large, MAX_DOWNLOAD_BYTES / 1024))
+                            } else {
+                                Result(true, msg(R.string.wd_ok_download), buf.readUtf8())
+                            }
+                        }
+                    }
                     resp.code == 404 -> Result(false, msg(R.string.wd_err_no_file))
                     resp.code == 401 -> Result(false, msg(R.string.wd_err_auth))
                     else -> Result(false, msg(R.string.wd_err_download, resp.code))
