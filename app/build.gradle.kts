@@ -85,6 +85,20 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric（2026-09-19 引入）：在**电脑的 JVM** 上跑"影子 Android"，
+        // 不需要 AVD / 模拟器 / 真机。它换来两件本机单测做不到的事：
+        //  ① 能造真实 Bitmap（引擎的 FSM 才推得动 → 记账时序、点击后行为可测）
+        //  ② 能拿到真实 Context（AppConfig/SharedPreferences 可实例化）
+        // 注意：测试用 @Config(sdk=[34]) 固定版本，避免依赖 SDK 36 的 android-all。
+        unitTests.isIncludeAndroidResources = true
+        // Robolectric 的 android-all 是**测试运行时**才下载的（~100MB+），
+        // 它读的是测试 JVM 的系统属性，而不是 Gradle 的仓库配置 —— 国内直连
+        // Maven Central 会卡住（2026-09-19 实测：卡了十几分钟没动静）。
+        // 这里显式指向阿里云公共镜像（它是 Maven Central 的完整镜像）。
+        unitTests.all {
+            it.systemProperty("robolectric.dependency.repo.id", "aliyun")
+            it.systemProperty("robolectric.dependency.repo.url", "https://maven.aliyun.com/repository/public")
+        }
     }
 
     lint {
@@ -136,6 +150,9 @@ dependencies {
     // Android 框架，可以在 JVM 上直接跑。这些函数一旦出错就是"点错行/漏买"，
     // 用单测锁住比每次真机回归便宜得多。
     testImplementation("junit:junit:4.13.2")
+    // FSM 驱动测试：真 Bitmap + 真 Context（见 testOptions 的说明）
+    testImplementation("org.robolectric:robolectric:4.15.1")
+    testImplementation("androidx.test:core:1.6.1")
     // 真实的 org.json 实现：Android 的 android.jar 在单元测试里是**桩**，
     // 所有方法返回默认值（JSONObject 会返回 null / 空），
     // 于是标注解析这类逻辑在 JVM 上永远失败。加上这个依赖才能真正测到逻辑。
