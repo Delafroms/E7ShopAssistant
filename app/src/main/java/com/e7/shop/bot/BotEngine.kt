@@ -654,11 +654,12 @@ class BotEngine(
         // **购买前必须检查金币/天空石预算**。
         // 此前预算闸门只在 doRefresh（刷新）里，购买路径没有 —— 后果是金币花光后
         // 仍会继续买（失败），然后继续刷新，**每刷新一次白烧 3 颗天空石**。
-        if (host.cfg.goldSpendCap > 0 && session.goldSpent >= host.cfg.goldSpendCap) {
+        // 共用闸门（BudgetGate）：与 AiBotEngine 同一份判断（2026-09-19）
+        if (BudgetGate.goldExceeded(session.goldSpent, host.cfg.goldSpendCap)) {
             host.setError(host.errGoldCap(session.goldSpent))
             return BuyResult.INERT
         }
-        if (host.cfg.maxSkystones > 0 && session.skystonesSpent >= host.cfg.maxSkystones) {
+        if (BudgetGate.skyExceeded(session.skystonesSpent, host.cfg.maxSkystones)) {
             host.setError(host.errSkyBudget())
             return BuyResult.INERT
         }
@@ -850,12 +851,13 @@ class BotEngine(
         // D4 审计：原有「金币下限」闸门（cfg.minGold + session.startGold）已删除——
         // 所有入口都传 startBot(0,0)，startGold 恒为 0，闸门永久短路。金币保护由下面
         // 真正生效的 goldSpendCap 提供。
-        if (host.cfg.goldSpendCap > 0 && session.goldSpent >= host.cfg.goldSpendCap) {
+        // 共用闸门（BudgetGate）：与 AiBotEngine 同一份判断（2026-09-19）
+        if (BudgetGate.goldExceeded(session.goldSpent, host.cfg.goldSpendCap)) {
             host.setError(host.errGoldCap(session.goldSpent))
             host.markCompleted()   // 正常完成任务 → 允许按设置自动熄屏
             return Phase.DONE
         }
-        if (host.cfg.maxSkystones > 0 && session.skystonesSpent >= host.cfg.maxSkystones) {
+        if (BudgetGate.skyExceeded(session.skystonesSpent, host.cfg.maxSkystones)) {
             host.setError(host.errSkyBudget())
             host.markCompleted()
             return Phase.DONE

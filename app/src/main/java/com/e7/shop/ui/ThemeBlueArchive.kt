@@ -100,7 +100,6 @@ import com.e7.shop.data.RecordStore
 import com.e7.shop.decodeFileSafe
 import com.e7.shop.loadBgBitmap
 import com.e7.shop.loadLogoBitmap
-import com.e7.shop.net.WebDavSync
 import kotlinx.coroutines.launch
 
 
@@ -839,18 +838,14 @@ private fun BaRecords(cfg: AppConfig) {
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
-                    scope.launch { syncMsg = WebDavSync(cfg, context).upload(records.exportJson()).message }
+                    scope.launch { syncMsg = wdUpload(cfg, records, context) }
                 }, modifier = Modifier.weight(1f), shape = BaShape) {
                     Icon(Icons.Filled.CloudUpload, contentDescription = null, Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.wd_upload))
                 }
                 OutlinedButton(onClick = {
-                    scope.launch {
-                        val r = WebDavSync(cfg, context).download()
-                        if (r.ok && r.data != null && records.importJson(r.data)) reload()
-                        syncMsg = r.message
-                    }
+                    scope.launch { syncMsg = wdDownload(cfg, records, context) { reload() } }
                 }, modifier = Modifier.weight(1f), shape = BaShape) {
                     Icon(Icons.Filled.CloudDownload, contentDescription = null, Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))

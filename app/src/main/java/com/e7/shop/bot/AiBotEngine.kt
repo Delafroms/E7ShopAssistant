@@ -201,12 +201,13 @@ class AiBotEngine(
         // D4 审计：这里原有「金币下限」闸门（minGold + startGold），但 startGold 恒为 0
         // （所有入口 startBot(0,0)），闸门永久短路 —— 已删除，避免留下"看起来有保护、
         // 实际永不触发"的假闸门。金币保护由下面真正生效的 goldSpendCap 提供。
-        if (c.goldSpendCap > 0 && s().goldSpent >= c.goldSpendCap) {
+        // 共用闸门（BudgetGate）：边界语义只有一份，两条管线不允许各自解释（2026-09-19）
+        if (BudgetGate.goldExceeded(s().goldSpent, c.goldSpendCap)) {
             host.setError(host.errGoldCap(s().goldSpent))
             host.markCompleted()   // 正常完成任务 → 允许按设置自动熄屏
             return true
         }
-        if (c.maxSkystones > 0 && s().skystonesSpent >= c.maxSkystones) {
+        if (BudgetGate.skyExceeded(s().skystonesSpent, c.maxSkystones)) {
             host.setError(host.errSkyBudget())
             host.markCompleted()
             return true

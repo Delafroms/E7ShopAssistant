@@ -100,7 +100,6 @@ import com.e7.shop.data.RecordStore
 import com.e7.shop.decodeFileSafe
 import com.e7.shop.loadBgBitmap
 import com.e7.shop.loadLogoBitmap
-import com.e7.shop.net.WebDavSync
 import kotlinx.coroutines.launch
 
 /* ============================================================================
@@ -780,27 +779,21 @@ private fun StRecords(cfg: AppConfig) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
-                    scope.launch { syncMsg = WebDavSync(cfg, context).upload(records.exportJson()).message }
+                    scope.launch { syncMsg = wdUpload(cfg, records, context) }
                 }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.CloudUpload, contentDescription = null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.wd_upload))
                 }
                 OutlinedButton(onClick = {
-                    scope.launch {
-                        val r = WebDavSync(cfg, context).download()
-                        if (r.ok && r.data != null) {
-                            if (records.importJson(r.data)) reload()
-                        }
-                        syncMsg = r.message
-                    }
+                    scope.launch { syncMsg = wdDownload(cfg, records, context) { reload() } }
                 }, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Filled.CloudDownload, contentDescription = null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.wd_download))
                 }
                 OutlinedButton(onClick = {
-                    scope.launch { syncMsg = WebDavSync(cfg, context).testConnection().message }
+                    scope.launch { syncMsg = wdTest(cfg, context) }
                 }) {
                     Text(stringResource(R.string.wd_test))
                 }
