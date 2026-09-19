@@ -567,16 +567,13 @@ internal fun decodeFileSafe(f: java.io.File): Bitmap? = decodeFileSampled(f.abso
 
 internal fun loadLogoBitmap(ctx: Context, cfg: AppConfig): Bitmap? {
     return try {
+        // 2026-09-19：不再内置任何官方素材 —— 只支持用户自己上传的图片；
+        // 其余情况返回 null，由界面回退到文字标题（见 logoMode 的说明）。
         if (cfg.logoMode == "custom" && cfg.customLogoPath.isNotEmpty()) {
             if (cfg.customLogoPath.startsWith("content://")) {
                 decodeStreamSampled(ctx, Uri.parse(cfg.customLogoPath))
             } else decodeFileSampled(cfg.customLogoPath)
-        } else {
-            // 内置 logo 是打包资源，尺寸可控，但同样走采样以统一内存上限
-            ctx.assets.open("logo_official.png").use { ins ->
-                BitmapFactory.decodeStream(ins, null, BitmapFactory.Options().apply { inSampleSize = 1 })
-            }
-        }
+        } else null
     } catch (e: OutOfMemoryError) { null } catch (e: Exception) { null }
 }
 

@@ -282,9 +282,18 @@ class AppConfig(context: Context) {
         get() = sp.getInt("animEasingStrength", 100).coerceIn(0, 100)
         set(v) = sp.edit().putInt("animEasingStrength", v.coerceIn(0, 100)).apply()
 
-    /** Top logo mode: "official" (default, EPIC SEVEN image) | "text" | "custom" */
+    /**
+     * 顶部标识模式："text"（默认，纯文字标题）| "custom"（用户自己上传的图片）。
+     *
+     * 2026-09-19 变更：**移除了内置的"官方 Logo"模式**。原因：那张图是《第七史诗》的
+     * 官方素材（版权与商标归原权利人），不能随本项目一起授权分发。
+     * 旧值 "official" 一律归一化为 "text"（老用户升级后自动落到文字标题）。
+     */
     var logoMode: String
-        get() = sp.getString("logoMode", "official") ?: "official"
+        get() = when (val v = sp.getString("logoMode", "text")) {
+            null, "official" -> "text"
+            else -> v
+        }
         set(v) = sp.edit().putString("logoMode", v).apply()
 
     /** Custom logo image path (mode = custom) */

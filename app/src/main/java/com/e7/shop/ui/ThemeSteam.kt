@@ -419,7 +419,13 @@ private fun StHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
                 ) {
                     logoBmp?.let {
                         Image(it.asImageBitmap(), contentDescription = "logo", modifier = Modifier.height(44.dp))
-                    }
+                    } ?: Text(
+                        // 文字标题模式（默认）：不再内置任何官方素材，用应用名占位
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Spacer(Modifier.weight(1f))
                     Text(
                         "v$version",
@@ -993,14 +999,15 @@ private fun StSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
             Text(stringResource(R.string.logo_title), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 只保留「文字标题」与「自定义图片」：不再内置官方素材（版权原因）
                 FilterChip(
-                    selected = logoMode == "official",
+                    selected = logoMode == "text",
                     onClick = {
-                        logoMode = "official"
-                        cfg.logoMode = "official"
+                        logoMode = "text"
+                        cfg.logoMode = "text"
                         logoVersion++
                     },
-                    label = { Text(stringResource(R.string.logo_official)) }
+                    label = { Text(stringResource(R.string.logo_text)) }
                 )
                 FilterChip(
                     selected = logoMode == "custom",

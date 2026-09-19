@@ -191,8 +191,8 @@
     <string name="general">通用</string>
     <string name="bg_pick">选择背景图</string>
     <string name="clear">清除</string>
-    <string name="logo_title">顶部 Logo（仅图片，无文字）</string>
-    <string name="logo_official">官方 Logo</string>
+    <string name="logo_title">顶部标识（文字标题或自定义图片）</string>
+    <string name="logo_text">文字标题</string>
     <string name="logo_custom">自定义图片</string>
     <string name="splash_credit">heyyo x E7SA</string>
     <string name="err_recover_refresh_dlg">检测到刷新确认弹窗，正在安全关闭</string>

@@ -191,8 +191,8 @@
     <string name="general">General</string>
     <string name="bg_pick">Choose background image</string>
     <string name="clear">Clear</string>
-    <string name="logo_title">Top logo (image only)</string>
-    <string name="logo_official">Official logo</string>
+    <string name="logo_title">Top title (text or custom image)</string>
+    <string name="logo_text">Text title</string>
     <string name="logo_custom">Custom image</string>
     <string name="splash_credit">heyyo x E7SA</string>
     <string name="err_recover_refresh_dlg">Refresh dialog detected - closing it safely</string>

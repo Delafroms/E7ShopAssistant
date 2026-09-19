@@ -1040,10 +1040,11 @@ private fun BaSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.logo_title), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 只保留「文字标题」与「自定义图片」：不再内置官方素材（版权原因）
                 FilterChip(
                     selected = cfg.logoMode != "custom",
-                    onClick = { cfg.logoMode = "official" },
-                    label = { Text(stringResource(R.string.logo_official)) }
+                    onClick = { cfg.logoMode = "text" },
+                    label = { Text(stringResource(R.string.logo_text)) }
                 )
                 FilterChip(
                     selected = cfg.logoMode == "custom",
