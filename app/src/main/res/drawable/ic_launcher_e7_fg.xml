@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  E7SA 专属图标 · 前景层（2026-09-20 新增）
+  图形语言 = 这个 App 到底在干什么：
+    · 中间是**誓约书签**（商店里最主要的商品，也是玩家最在意的那件）
+    · 底部两颗圆点 = **神秘奖牌**与刷新（两种商品并存的语义）
+  全部落在自适应图标的安全区（中间 72×72，即 18..90）内，
+  所以圆形/方形/圆角矩形三种系统蒙版下都不会被裁到。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 书签主体 -->
+    <path
+        android:fillColor="#4D6BFE"
+        android:pathData="M42,30h24v46l-12,-9l-12,9z" />
+    <!-- 书签上的高光条 -->
+    <path
+        android:fillColor="#9DB6FF"
+        android:pathData="M47,38h14v7h-14z" />
+    <!-- 左下圆点：书签 -->
+    <path
+        android:fillColor="#FFD166"
+        android:pathData="M36,79m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0" />
+    <!-- 右下圆点：奖牌 -->
+    <path
+        android:fillColor="#EF476F"
+        android:pathData="M72,79m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0" />
+</vector>

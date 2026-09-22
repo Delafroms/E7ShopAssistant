@@ -31,6 +31,33 @@ sealed class SettingItem {
         val set: (String) -> Unit,
         val isPassword: Boolean = false
     ) : SettingItem()
+
+    /**
+     * 滑动条（整数区间，2026-09-20 新增）。
+     *
+     * 为什么不复用 [Number]：滑杆天然把取值范围锁死在 `[min, max]`，用户不可能填出
+     * 非法值；而 1~8 这种小范围连续值用输入框既难精确点选，又要额外做夹取与错误提示。
+     */
+    data class Slider(
+        override val labelRes: Int,
+        val get: () -> Int,
+        val set: (Int) -> Unit,
+        val min: Int,
+        val max: Int
+    ) : SettingItem()
+
+    /**
+     * 单选（2026-09-20 新增）：在一组固定选项里选一个。
+     *
+     * 比"几个互斥开关"语义清楚得多，也不会出现"两个都开着"的非法状态。
+     * [options] 的顺序即展示顺序，取值用字符串便于以后扩展（不必改类型）。
+     */
+    data class Choice(
+        override val labelRes: Int,
+        val get: () -> String,
+        val set: (String) -> Unit,
+        val options: List<Pair<String, Int>>
+    ) : SettingItem()
 }
 
 data class SettingsSection(val titleRes: Int, val items: List<SettingItem>)
@@ -60,6 +87,47 @@ object SettingsSchema {
                 // 预算用完（金币/天空石/持有量达上限）→ 自动熄屏省电，适合睡前挂机
                 SettingItem.Switch(R.string.auto_lock_on_done, { cfg.autoLockOnDone }, { cfg.autoLockOnDone = it }),
                 SettingItem.Number(R.string.speed_mult, { cfg.speedMult.toLong() }, { cfg.speedMult = it.toInt().coerceIn(1, 3) }),
+                // 推理线程数（2026-09-20 新增）：YOLO 与 OCR-det 的 ncnn num_threads。
+                // 实测 2 线程每帧最快（YOLO −22%、合计 −16%），4 以上无收益（并行度饱和）。
+                // 默认 1 = 与历史行为完全一致。
+                // set 回调里**顺手让改动立即生效**（不必等下次启动机器人）：模型未加载时
+                // nativeSetThreads 返回 -1 且不改动任何东西，所以这里调用永远安全。
+                SettingItem.Slider(
+                    R.string.infer_threads,
+                    { cfg.yoloThreads },
+                    {
+                        cfg.yoloThreads = it
+                        com.e7.shop.ShopAccessibilityService.instance?.applyThreadSetting()
+                    },
+                    1, 8
+                ),
+                // 最长运行时长（分钟，0 = 不限）：到点后**无条件停止**（不看金币/天空石上限），
+                // 走"正常收工"路径 —— 因此 autoLockOnDone 仍然生效。
+                // 输入框只接受数字（StNumField/BaNumField 都做了 isDigit 过滤），
+                // 配置读写两端再各夹一次 coerceAtLeast(0)，确保负数进不来。
+                SettingItem.Number(
+                    R.string.max_run_minutes,
+                    { cfg.maxRunMinutes.toLong() },
+                    { cfg.maxRunMinutes = it.toInt().coerceAtLeast(0) }
+                ),
+                // 桌面图标三选一（2026-09-20 新增）：**现有图标保留不删**，随时换回。
+                // 实际切换由 IconSwitcher 用 PackageManager 完成（activity-alias 方案：
+                // 不重装、不杀进程）；服务未连接时只存配置，下次服务启动会补应用一次。
+                SettingItem.Choice(
+                    R.string.icon_choice,
+                    { cfg.iconVariant },
+                    {
+                        cfg.iconVariant = it
+                        com.e7.shop.ShopAccessibilityService.instance?.let { svc ->
+                            com.e7.shop.ui.IconSwitcher.apply(svc, it)
+                        }
+                    },
+                    listOf(
+                        "default" to R.string.icon_default,
+                        "e7" to R.string.icon_e7,
+                        "ba" to R.string.icon_ba
+                    )
+                ),
                 // 无障碍保活豁免：授权本应用把自己写进系统的无障碍豁免名单。
                 // 之所以要做成**用户可见的开关**：旧版是在服务连接时静默改写系统设置，
                 // 玩家既不知道、也无法关闭 —— 属于"超出授权范围的静默行为"。

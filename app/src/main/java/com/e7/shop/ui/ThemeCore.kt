@@ -27,11 +27,12 @@ interface E7Theme {
 }
 
 object ThemeRegistry {
-    val all: List<E7Theme> = listOf(SteamTheme, SteamOledTheme, BlueArchiveTheme)
+    val all: List<E7Theme> = listOf(SteamTheme, SteamOledTheme, BlueArchiveTheme, DeepSeekTheme)
 
     fun forId(id: String): E7Theme = when (id) {
         "oled" -> SteamOledTheme
         "ba", "bluearchive" -> BlueArchiveTheme
+        "deepseek" -> DeepSeekTheme
         else -> SteamTheme
     }
 }

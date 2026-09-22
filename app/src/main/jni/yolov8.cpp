@@ -64,3 +64,10 @@ void YOLOv8::set_det_target_size(int target_size)
 {
     det_target_size = target_size;
 }
+
+void YOLOv8::set_num_threads(int threads)
+{
+    // 只改 ncnn 的算子并行度（见头文件里的说明：与 OpenCV 的单线程约束无关）。
+    // 非正值一律回到默认 1，避免误传 0 导致 ncnn 用"自动"线程数而偏离预期。
+    yolov8.opt.num_threads = (threads > 0) ? threads : 1;
+}

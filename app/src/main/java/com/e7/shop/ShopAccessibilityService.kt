@@ -113,13 +113,63 @@ class ShopAccessibilityService : AccessibilityService() {
         Thread {
             val ok = com.e7.shop.bot.PpOcr.load(assets)
             android.util.Log.i("E7SA.PpOcr", "PP-OCRv5 load=$ok")
+            // 必须在 load **之后**应用线程数：native 的 opt 只在模型加载后才存在，
+            // 早于 load 调用会返回 -1 且不生效（不是"设了没反应"的假开关）。
+            if (ok) {
+                val applied = com.e7.shop.bot.PpOcr.setThreads(cfg.yoloThreads)
+                android.util.Log.i("E7SA.PpOcr", "threads=${cfg.yoloThreads} applied=$applied")
+            }
         }.start()
         // Load YOLOv8 (ncnn) detector once at service connect (icon recall layer).
         Thread {
             val ok = com.e7.shop.bot.YoloDet.load(assets)
             android.util.Log.i("E7SA.YoloDet", "YOLOv8 load=$ok")
+            if (ok) {
+                val applied = com.e7.shop.bot.YoloDet.setThreads(cfg.yoloThreads)
+                android.util.Log.i("E7SA.YoloDet", "threads=${cfg.yoloThreads} applied=$applied")
+            }
         }.start()
         startForegroundCompat()
+        // 性能监控（2026-09-20 新增）：机器人运行时每 30 秒把 **GPU / CPU / 电池的具体数值**
+        // 写进运行日志（`E7SA.Perf`）。用户要"挂一整夜看数据"，靠的就是这条曲线 ——
+        // 温度爬升、频率被压（降频）、电流大小都能直接读出来，不用再靠体感推断。
+        //
+        // 两个刻意的选择：
+        //  · **只在 running 时采样** —— 空闲时刷屏无意义，也会把真正的曲线淹掉；
+        //  · 日志级别固定 "normal" —— 无论用户把日志调成哪一档都必须落盘，
+        //    否则"为了拿数据而挂的一夜"会因为没有数据而白挂。
+        Thread {
+            while (true) {
+                try {
+                    Thread.sleep(30_000L)
+                    if (state.running) {
+                        runLog.write(
+                            "E7SA.Perf",
+                            "stage=${state.stage} " + com.e7.shop.device.PerfMonitor.snapshot(this),
+                            "normal"
+                        )
+                    }
+                    // 分项耗时（2026-09-21）：每 60 秒输出一次"这一分钟的时间去哪了"。
+                    // 用来定位"进程 CPU 忙碌约 139 分钟 vs 识别仅 8.8 分钟"那 130 分钟的差额。
+                    // 放在 running 判断**之外**：窗口是 60 秒制的，只有连续调用才准。
+                    com.e7.shop.device.Profiler.dumpIfDue()?.let {
+                        runLog.write("E7SA.Prof", it, "normal")
+                    }
+                } catch (e: InterruptedException) {
+                    break
+                } catch (e: Throwable) {
+                    // 监控绝不能影响机器人：吞掉一切异常
+                    // （单项读不到时 PerfMonitor 内部已记 "-"，见那里的容错说明）
+                }
+            }
+        }.apply { isDaemon = true; name = "e7sa-perf" }.start()
+        // 应用桌面图标选择（2026-09-20 新增）：设置页在服务未连接时只写入配置，
+        // 这里补应用一次 —— 保证"选了就一定生效"，不依赖用户重新点一遍。
+        try {
+            com.e7.shop.ui.IconSwitcher.apply(this, cfg.iconVariant)
+        } catch (e: Exception) {
+            android.util.Log.w("E7SA.Icon", "apply icon on connect failed: " + e.message)
+        }
         // 关闭系统对无障碍服务的"自动关闭"机制（实测事故驱动，见方法注释）
         ensureAccessibilityNotAutoDisabled()
     }
@@ -777,6 +827,23 @@ class ShopAccessibilityService : AccessibilityService() {
 
     /** 长按版本号触发：跑双引擎回归基准，结果落地 benchmark_report.json。 */
     fun debugRunBenchmark(): String = diagnostics.runBenchmark()
+
+    /**
+     * 应用「推理线程数」设置（2026-09-20 新增）。
+     *
+     * 由设置滑杆在值变化时调用 —— 这样改完**立即生效**，不必等下次启动机器人
+     * （避免"改了设置要重启才生效"这种半截体验）。
+     *
+     * 模型尚未加载时 native 侧返回 -1 且**不改动任何状态**，所以这里调用永远安全；
+     * 真正的首次应用时机是 [onServiceConnected] 里 `load()` 之后（见那里的说明）。
+     */
+    fun applyThreadSetting(): String {
+        val want = cfg.yoloThreads
+        val y = com.e7.shop.bot.YoloDet.setThreads(want)
+        val o = com.e7.shop.bot.PpOcr.setThreads(want)
+        android.util.Log.i("E7SA.Threads", "apply threads=$want yolo=$y ocr=$o")
+        return "threads=$want yolo=$y ocr=$o"
+    }
 
     /** 长按触发：采集原始截图（不做识别），用于诊断"截图拿到的是什么"。 */
     fun debugCaptureRaw(n: Int): String = diagnostics.captureRaw(n)

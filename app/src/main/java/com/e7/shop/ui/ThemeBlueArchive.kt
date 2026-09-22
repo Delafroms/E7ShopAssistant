@@ -1011,7 +1011,7 @@ private fun BaSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
                 ) {
                     RadioButton(
                         selected = cfg.appearance == theme.id ||
-                            (theme.id == "dark" && cfg.appearance !in listOf("oled", "ba", "bluearchive")),
+                            (theme.id == "dark" && cfg.appearance !in listOf("oled", "ba", "bluearchive", "deepseek")),
                         onClick = {
                             cfg.appearance = theme.id
                             onChangeAppearance(theme.id)
@@ -1071,6 +1071,12 @@ private fun BaSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
                         is SettingItem.Text -> BaTextField(
                             stringResource(item.labelRes), item.get(), item.isPassword
                         ) { item.set(it) }
+                        is SettingItem.Slider -> BaSliderRow(
+                            stringResource(item.labelRes), item.get(), item.min, item.max
+                        ) { item.set(it) }
+                        is SettingItem.Choice -> BaChoiceRow(
+                            stringResource(item.labelRes), item.get(), item.options
+                        ) { item.set(it) }
                     }
                     Spacer(Modifier.height(4.dp))
                 }
@@ -1084,6 +1090,43 @@ private fun BaSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun BaChoiceRow(label: String, current: String, options: List<Pair<String, Int>>, onPick: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { (id, res) ->
+                OutlinedButton(onClick = { onPick(id) }) {
+                    Text(
+                        stringResource(res),
+                        fontWeight = if (id == current) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BaSliderRow(label: String, value0: Int, min: Int, max: Int, onValue: (Int) -> Unit) {
+    var value by remember(value0) { mutableStateOf(value0) }
+    Column(Modifier.fillMaxWidth()) {
+        Text("$label  $value", style = MaterialTheme.typography.bodyMedium)
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { v ->
+                val n = Math.round(v).coerceIn(min, max)
+                value = n
+                onValue(n)
+            },
+            valueRange = min.toFloat()..max.toFloat(),
+            // 离散刻度：Material3 的 steps 是"中间刻度"数量，1..8 → 6
+            steps = (max - min - 1).coerceAtLeast(0)
+        )
     }
 }
 

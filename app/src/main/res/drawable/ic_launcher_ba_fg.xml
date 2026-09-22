@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Blue Archive 风格图标 · 前景层（2026-09-20 新增）
+  图形语言 = "光环 + 中心"（学院感的抽象表达），自绘、不含任何官方图案。
+  外环用 evenOdd 挖空成环；中心实心圆作为视觉焦点。
+  同样落在安全区（18..90）内。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 外环（evenOdd：外圆挖去内圆 = 环） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,28a26,26 0 1,0 0.1,0z M54,36a18,18 0 1,1 -0.1,0z" />
+    <!-- 中心实心圆 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-10,0a10,10 0 1,0 20,0a10,10 0 1,0 -20,0" />
+</vector>

@@ -30,16 +30,61 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.E7Shop">
 
+        <!-- 启动页：本身**不再带 LAUNCHER**（2026-09-20 图标三选一改造）。
+             改为三个 activity-alias 指向它，运行时用 PackageManager 只启用其中一个 ——
+             这样"换图标"不需要重装、也不需要多份 Activity 实现。
+             三个 alias 的 icon 分别指向三套自适应图标；label 都用 app_name，
+             所以在桌面看到的名称不变，只有图标随选择切换。 -->
         <activity
             android:name=".SplashActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.E7Shop">
+            android:theme="@style/Theme.E7Shop" />
+
+        <!-- ① 现有图标：**默认启用，且永不删除**（用户要求"别删，存着选择用"） -->
+        <activity-alias
+            android:name=".IconDefault"
+            android:targetActivity=".SplashActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- ② E7SA 专属图标（书签 + 双点，见 drawable/ic_launcher_e7_*.xml） -->
+        <activity-alias
+            android:name=".IconE7"
+            android:targetActivity=".SplashActivity"
+            android:icon="@mipmap/ic_launcher_e7"
+            android:roundIcon="@mipmap/ic_launcher_e7"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- ③ Blue Archive 风格图标（光环，自绘不含官方素材） -->
+        <activity-alias
+            android:name=".IconBa"
+            android:targetActivity=".SplashActivity"
+            android:icon="@mipmap/ic_launcher_ba"
+            android:roundIcon="@mipmap/ic_launcher_ba"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".MainActivity"

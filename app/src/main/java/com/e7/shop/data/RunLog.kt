@@ -59,6 +59,9 @@ class RunLog(context: Context) {
         if (!allows(required)) return
         // 优先写本轮独立文件；未开始会话时退回固定文件
         val f = sessionFile ?: file ?: return
+        // C1 埋点（2026-09-22）：detail 级日志每帧要拼字符串 + 同步 appendText 写文件，
+        // 是 bot 线程那 20 秒未归属时间里的头号嫌疑（synchronized 争用也计入）。
+        val t0 = System.currentTimeMillis()
         synchronized(lock) {
             try {
                 f.appendText("${fmt.format(Date())}  ${tag.padEnd(14)}  $msg\n")
@@ -66,6 +69,7 @@ class RunLog(context: Context) {
                 // 日志失败绝不影响主流程
             }
         }
+        com.e7.shop.device.Profiler.record("log", System.currentTimeMillis() - t0)
     }
 
     /**

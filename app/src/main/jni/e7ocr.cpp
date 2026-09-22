@@ -241,4 +241,18 @@ JNIEXPORT jobjectArray JNICALL Java_com_e7_shop_bot_PpOcr_nativeOcr(JNIEnv* env,
     return arr;
 }
 
+// Java_com_e7_shop_bot_PpOcr_nativeSetThreads(int threads) -> int
+// 运行时切换 OCR **det** 的推理线程数（诊断对比用；生产默认值仍是 1）。
+// 返回实际生效的线程数；-1 表示模型尚未加载。
+// 注意 rec 不受影响（它在任务级并行循环里，必须单线程，见 ppocrv5.h 的说明）。
+JNIEXPORT jint JNICALL Java_com_e7_shop_bot_PpOcr_nativeSetThreads(JNIEnv* env, jobject thiz, jint threads)
+{
+    std::lock_guard<std::mutex> lock(g_ocr_mutex);
+    if (g_ocr == 0) { LOGE("nativeSetThreads: model not loaded"); return -1; }
+    const int t = (threads > 0) ? (int)threads : 1;
+    g_ocr->set_num_threads(t);
+    LOGI("nativeSetThreads: det num_threads=%d", t);
+    return t;
+}
+
 } // extern "C"

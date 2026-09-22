@@ -704,7 +704,7 @@ private fun StHome(cfg: AppConfig, bot: ShopAccessibilityService.BotState, conne
 /* ---- Steam 记录页 ---- */
 
 @Composable
-private fun StRecords(cfg: AppConfig) {
+internal fun StRecords(cfg: AppConfig) {
     val context = LocalContext.current
     val records = remember { RecordStore(context) }
     var totals by remember { mutableStateOf(records.loadTotals()) }
@@ -800,7 +800,7 @@ private fun StRecords(cfg: AppConfig) {
 /* ---- Steam 我的页 ---- */
 
 @Composable
-private fun StProfile(cfg: AppConfig) {
+internal fun StProfile(cfg: AppConfig) {
     val context = LocalContext.current
     var showChangeLog by remember { mutableStateOf(false) }
     var floatyOn by remember { mutableStateOf(cfg.floatyEnabled) }
@@ -917,7 +917,7 @@ private fun StProfile(cfg: AppConfig) {
 /* ---- Steam 设置页 ---- */
 
 @Composable
-private fun StSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
+internal fun StSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
     val context = LocalContext.current
     var appearance by remember { mutableStateOf(cfg.appearance) }
     var bgVersion by remember { mutableStateOf(0) }
@@ -956,7 +956,7 @@ private fun StSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
                         else -> Color(0xFF1B2838)
                     },
                     selected = appearance == theme.id ||
-                        (theme.id == "dark" && appearance !in listOf("oled", "ba", "bluearchive"))
+                        (theme.id == "dark" && appearance !in listOf("oled", "ba", "bluearchive", "deepseek"))
                 ) {
                     appearance = theme.id
                     onChangeAppearance(theme.id)
@@ -977,6 +977,10 @@ private fun StSettings(cfg: AppConfig, onChangeAppearance: (String) -> Unit) {
                             StNumField(stringResource(item.labelRes), item.get().toString()) { item.set(it) }
                         is SettingItem.Text ->
                             StTextField(stringResource(item.labelRes), item.get(), item.isPassword) { item.set(it) }
+                        is SettingItem.Slider ->
+                            StSliderRow(stringResource(item.labelRes), item.get(), item.min, item.max) { item.set(it) }
+                        is SettingItem.Choice ->
+                            StChoiceRow(stringResource(item.labelRes), item.get(), item.options) { item.set(it) }
                     }
                     Spacer(Modifier.height(8.dp))
                 }
@@ -1170,6 +1174,55 @@ internal fun EasingPicker(cfg: AppConfig) {
                 cfg.animEasingStrength = it.toInt()
             },
             valueRange = 0f..100f
+        )
+    }
+}
+
+/**
+ * 单选行（2026-09-20 新增）：一组固定选项，选中项加粗。
+ * 用 OutlinedButton 而非 FilterChip，省得给两个主题各补一份 material3 组件 import。
+ */
+@Composable
+internal fun StChoiceRow(label: String, current: String, options: List<Pair<String, Int>>, onPick: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { (id, res) ->
+                OutlinedButton(onClick = { onPick(id) }) {
+                    Text(
+                        stringResource(res),
+                        fontWeight = if (id == current) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 滑杆行（2026-09-20 新增）：整数区间 `[min, max]`，步长 1。
+ *
+ * 离散刻度的算法：Material3 的 `steps` 是**中间刻度**的数量，
+ * 所以 1..8 要传 6（两端各 1 个 + 中间 6 个 = 8 个可选值）。
+ *
+ * 取值先 `roundToInt` 再夹取：滑杆在触摸时可能给出 2.0000001 这类浮点值，
+ * 直接 toInt 会偶发少 1；夹取则保证写入配置的一定是合法区间内的整数。
+ */
+@Composable
+internal fun StSliderRow(label: String, value0: Int, min: Int, max: Int, onValue: (Int) -> Unit) {
+    var value by remember(value0) { mutableStateOf(value0) }
+    Column(Modifier.fillMaxWidth()) {
+        Text("$label  $value", style = MaterialTheme.typography.bodyMedium)
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { v ->
+                val n = Math.round(v).coerceIn(min, max)
+                value = n
+                onValue(n)
+            },
+            valueRange = min.toFloat()..max.toFloat(),
+            steps = (max - min - 1).coerceAtLeast(0)
         )
     }
 }

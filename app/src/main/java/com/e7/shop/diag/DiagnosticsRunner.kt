@@ -5,7 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import com.e7.shop.bot.Candidate
+import com.e7.shop.bot.PpOcr
 import com.e7.shop.bot.RecognitionEngines
+import com.e7.shop.bot.YoloDet
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -84,6 +86,9 @@ class DiagnosticsRunner(
         root.put("p95Ms", p.getLong("p95Ms"))
         root.put("detail", p.getJSONArray("detail"))
         root.put("engines", engineArr)
+        // 线程数扫描（2026-09-20）：回答"YOLO/OCR 放开多线程到底值不值"。
+        // 与上面两套引擎的指标并列，便于同一次长按版本号就拿到全部数据。
+        root.put("threadScan", scanThreads(allNames))
 
         // 落地到外部私有目录（可 adb pull，供回归台自动收集）
         var savedPath = "-"
@@ -100,9 +105,88 @@ class DiagnosticsRunner(
         return "samples=${p.getInt("samples")} | " + parts.joinToString(" | ") + " -> $savedPath"
     }
 
+    /**
+     * 线程数扫描（2026-09-20 新增）：对比不同 ncnn 推理线程数下的 YOLO / OCR-det 单帧耗时
+     * 与进程 CPU 占用率。
+     *
+     * **为什么要实测而不是推理**：YOLO 与 OCR-det 的 `opt.num_threads` 都写死 1，那是历史上
+     * 为规避**真 libomp** 的 __kmp_affinity_initialize 崩溃而选的；现在链接的是 ncnn 自带的
+     * simpleomp（无 affinity 代码），那条崩溃路径已不存在 —— 而且 OCR 的 rec 循环早就在用
+     * `#pragma omp parallel for num_threads(ncnn::get_big_cpu_count())` 多线程。
+     *
+     * 理论上"低频多核"比"高频单核"更省能量（功耗 ∝ 电压²×频率，跑高频必须抬电压），
+     * 所以放开线程数**可能既更快又更凉**。但实际加速比受制于算子并行度（depthwise 卷积等
+     * 并行度有限），降温幅度受制于厂商 DVFS 策略 —— 只能用数据回答。
+     *
+     * **只测量、不改生产**：扫描结束（含异常路径）无条件把线程数恢复为 1。
+     */
+    private fun scanThreads(allNames: List<String>): JSONArray {
+        val rows = JSONArray()
+        val sample = allNames.take(THREAD_SCAN_SAMPLES)
+        if (sample.isEmpty()) return rows
+        val cores = Runtime.getRuntime().availableProcessors()
+        // 候选：单线程基线 / 2 / 4 / 全部核心（distinct 去掉重复，例如 4 核机器上 4 == cores）
+        val candidates = listOf(1, 2, 4, cores).distinct().filter { it >= 1 }
+
+        // 预热一次：首次推理含 ncnn 内部的惰性分配与缓存建立，计进去会污染第一组
+        runCatching {
+            val raw = readBenchData("benchmark/positive/${sample[0]}")
+                ?: readBenchData("benchmark/negative/${sample[0]}")
+            raw?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }?.let { bmp ->
+                YoloDet.detect(bmp)
+                PpOcr.recognize(bmp)
+                bmp.recycle()
+            }
+        }
+
+        try {
+            for (t in candidates) {
+                val appliedY = YoloDet.setThreads(t)
+                val appliedO = PpOcr.setThreads(t)
+                val yoloMs = ArrayList<Long>()
+                val ocrMs = ArrayList<Long>()
+                val cpu0 = android.os.Process.getElapsedCpuTime()
+                val wall0 = System.nanoTime()
+                for (name in sample) {
+                    val raw = readBenchData("benchmark/positive/$name")
+                        ?: readBenchData("benchmark/negative/$name") ?: continue
+                    val bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size) ?: continue
+                    val a = System.nanoTime()
+                    YoloDet.detect(bmp)
+                    val b = System.nanoTime()
+                    PpOcr.recognize(bmp)
+                    val c = System.nanoTime()
+                    yoloMs.add((b - a) / 1_000_000)
+                    ocrMs.add((c - b) / 1_000_000)
+                    bmp.recycle()
+                }
+                val wallMs = (System.nanoTime() - wall0) / 1_000_000
+                val cpuMs = android.os.Process.getElapsedCpuTime() - cpu0
+                val yAvg = if (yoloMs.isEmpty()) 0L else yoloMs.sum() / yoloMs.size
+                val oAvg = if (ocrMs.isEmpty()) 0L else ocrMs.sum() / ocrMs.size
+                val row = JSONObject()
+                row.put("threads", t)
+                row.put("appliedYolo", appliedY)
+                row.put("appliedOcr", appliedO)
+                row.put("yoloAvgMs", yAvg)
+                row.put("ocrAvgMs", oAvg)
+                row.put("totalAvgMs", yAvg + oAvg)
+                // CPU 占用率 = 进程累计 CPU 时间 / 墙钟时间（可 >100%：多核并行）
+                row.put("cpuBusyPct", if (wallMs > 0) 100.0 * cpuMs / wallMs else 0.0)
+                row.put("samples", yoloMs.size)
+                rows.put(row)
+                Log.i(TAG, "threadScan threads=$t yolo=${yAvg}ms ocr=${oAvg}ms cpu=${"%.0f".format(row.getDouble("cpuBusyPct"))}%")
+            }
+        } finally {
+            // ⚠ 无条件恢复默认：诊断绝不能改变生产行为（哪怕中途抛异常）
+            YoloDet.setThreads(1)
+            PpOcr.setThreads(1)
+        }
+        return rows
+    }
+
     /** 单套引擎跑完整数据集，返回该引擎的指标 JSON（含逐张明细）。 */
-    private fun runForEngine(engineId: String, allNames: List<String>): JSONObject {
-        val engine = RecognitionEngines.create(engineId)
+    private fun runForEngine(engineId: String, allNames: List<String>): JSONObject {        val engine = RecognitionEngines.create(engineId)
         var actual = engineId
         val samples = JSONArray()
         var totalGt = 0
@@ -148,7 +232,17 @@ class DiagnosticsRunner(
                 o.put("detected", detectedCnt)
                 o.put("falseCand", falseCnt)
                 o.put("tolerance", tol.toInt())
-                o.put("candidates", JSONArray(targets.map { "${it.kind}@${it.rowY}" }))
+                // 2026-09-22（A4）：候选带上**来源标注** —— 复盘「假候选 / 漏检」时必须能
+                // 区分它来自 YOLO 图标框、OCR 商品名，还是零候选时的亮度增强重试。
+                o.put("candidates", JSONArray(targets.map { c ->
+                    val src = when {
+                        c.evidence.any { it.startsWith("yolo-box-bright") } -> "yolo-bright"
+                        c.evidence.any { it.startsWith("yolo-box") } -> "yolo"
+                        c.evidence.any { it.startsWith("ocr-name") } -> "ocr"
+                        else -> "?"
+                    }
+                    c.kind + "@" + c.rowY + "[" + src + "]"
+                }))
                 o.put("groundTruth", JSONArray(gt.map { "${it.kind}@${it.cy}" }))
                 samples.put(o)
 
@@ -295,6 +389,12 @@ class DiagnosticsRunner(
 
         /** 单次原始截图采集的上限张数。 */
         const val MAX_RAW_CAPTURE = 100
+
+        /**
+         * 线程数扫描每组用的样本张数（2026-09-20）。
+         * 取 6：4 组线程数 × 6 张 × (YOLO+OCR) 约 15 秒，够稳定又不会让长按版本号等太久。
+         */
+        const val THREAD_SCAN_SAMPLES = 6
 
         /**
          * 采集前保留的历史图数量（见 [pruneRawCapture]）。

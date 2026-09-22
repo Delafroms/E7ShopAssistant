@@ -1,0 +1,33 @@
+﻿{
+    "tag":  "thrscan",
+    "timestamp":  "2026-09-20T22:56:19",
+    "engine":  "yolo",
+    "samples":  14,
+    "errors":  0,
+    "gtTotal":  14,
+    "detected":  14,
+    "falseCand":  3,
+    "recall":  1,
+    "avgMs":  717,
+    "medianMs":  741,
+    "p95Ms":  861,
+    "engines":  [
+                    {
+                        "id":  "yolo",
+                        "recall":  1,
+                        "falseCand":  3,
+                        "avgMs":  717,
+                        "medianMs":  741,
+                        "p95Ms":  861
+                    },
+                    {
+                        "id":  "traditional",
+                        "recall":  0.9286,
+                        "falseCand":  3,
+                        "avgMs":  402,
+                        "medianMs":  437,
+                        "p95Ms":  585
+                    }
+                ],
+    "pass":  true
+}

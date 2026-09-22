@@ -36,7 +36,7 @@ class RedTeamFsmTest {
     private fun ctx() = ApplicationProvider.getApplicationContext<android.content.Context>()
 
     /** 攻击场景：决定"商店行"和"弹窗"长什么样。 */
-    private enum class Attack { MISMATCHED_DIALOG_KIND, FAKE_BUY_BUTTON_LEFT, AMBIGUOUS_PRICE, SOLD_OUT, DIALOG_NEVER_CLOSES }
+    private enum class Attack { MISMATCHED_DIALOG_KIND, FAKE_BUY_BUTTON_LEFT, AMBIGUOUS_PRICE, SOLD_OUT, DIALOG_NEVER_CLOSES, REFRESH_CONFIRM_MISSES }
 
     private inner class FakeHost(override val cfg: AppConfig) : BotEngine.Host {
         override val screenW = w
@@ -118,8 +118,44 @@ class RedTeamFsmTest {
                 return if (fin > buy) attack == Attack.DIALOG_NEVER_CLOSES else true
             }
 
+        /** 刷新弹窗是否开着：点过「立即更新」、之后既没被取消也没被确认。 */
+        private val refreshDlgOpen: Boolean
+            get() {
+                val r = lastIndexOf("refresh")
+                if (r < 0) return false
+                if (lastIndexOf("recoverCancel") > r) return false
+                return lastIndexOf("refreshConfirm") < r
+            }
+
         override fun analyze(bmp: Bitmap): DetectionResult =
-            if (dialogOpen) dialog() else shopRow()
+            when {
+                // 攻击⑥：整屏无目标 → 引擎只能走刷新；而刷新确认点下后列表**一帧都不变**，
+                // 模拟"确认键点到了取消"（弹窗关了、天空石没花、列表也没换）。
+                attack == Attack.REFRESH_CONFIRM_MISSES && refreshDlgOpen -> refreshDialog()
+                attack == Attack.REFRESH_CONFIRM_MISSES -> emptyShop()
+                dialogOpen -> dialog()
+                else -> shopRow()
+            }
+
+        /** 无目标的商店列表：只留「立即更新」，逼引擎走刷新路径。 */
+        private fun emptyShop(): DetectionResult =
+            DetectionResult(
+                Scene.SHOP_LIST,
+                listOf(PpOcr.OcrLine("立即更新", 900f, 200f, 0.95f)),
+                emptyList(), emptyList(), id, "redteam"
+            )
+
+        /** 刷新确认弹窗：含「更新+天空石」与「确认」，sceneOf 判为 REFRESH_DLG。 */
+        private fun refreshDialog(): DetectionResult =
+            DetectionResult(
+                Scene.REFRESH_DLG,
+                listOf(
+                    PpOcr.OcrLine("要消耗天空石立即更新吗？", 300f, 300f, 0.95f),
+                    PpOcr.OcrLine("取消", 500f, 500f, 0.95f),
+                    PpOcr.OcrLine("确认", 900f, 500f, 0.95f)
+                ),
+                emptyList(), emptyList(), id, "redteam"
+            )
 
         /** 商店列表：第 rowY 行一件誓约书签（可买），可带攻击变形。 */
         private fun shopRow(): DetectionResult {
@@ -143,9 +179,12 @@ class RedTeamFsmTest {
                 PpOcr.OcrLine("确认购买", 900f, 500f, 0.95f)
             )
             if (attack == Attack.AMBIGUOUS_PRICE) {
-                lines.add(PpOcr.OcrLine("184000", 300f, 380f, 0.95f))
-                // 真正的歧义：两条**相同**的期望价 → priceMatches 要求"恰好一条"
-                lines.add(PpOcr.OcrLine("184000", 320f, 420f, 0.95f))
+                // 2026-09-20 修正：这里的注释一直写的是"184000 与 999999"（真歧义），
+                // 实现塞的却是**两个 184000** —— 用例被调成"能过"的样子，反而掩盖了
+                // 旧判据的语义倒置：同价重复被拒（→ 真机 2472 次活锁），
+                // 而"价格根本对不上"这种真异常反被放行。
+                // 现在按注释本意构造：弹窗价格与期望不符 → 价格项必须拒绝。
+                lines.add(PpOcr.OcrLine("999999", 300f, 380f, 0.95f))
             } else {
                 lines.add(PpOcr.OcrLine("184000", 300f, 380f, 0.95f))
             }
@@ -196,13 +235,13 @@ class RedTeamFsmTest {
     }
 
     /**
-     * 攻击③：**价格歧义** —— 弹窗里出现两个 6 位数字（184000 与 999999）。
-     * 期望：三重验证里的"价格唯一匹配"拒绝，不确认购买。
+     * 攻击③：**价格对不上** —— 弹窗里是誓约书签，但价格显示 999999（不是 184000）。
+     * 期望：三重验证里的价格项拒绝，不确认购买，并走封顶预算。
      */
     @Test
     fun attack_ambiguous_price_blocks_confirmation() {
         val (host, session) = runAttack(Attack.AMBIGUOUS_PRICE)
-        assertFalse("价格有歧义时不得确认购买", host.gateTags.contains("finalPurchase"))
+        assertFalse("价格对不上时不得确认购买", host.gateTags.contains("finalPurchase"))
         assertEquals("不得记账", 0, session!!.bookmarksGot)
         assertTrue(
             "确定性失败必须被封顶（出现「暂时放弃该行」而不是无限锤同一个按钮）",
@@ -238,6 +277,27 @@ class RedTeamFsmTest {
         assertTrue(
             "必须留下 UNCONFIRMED 记录（事后可复盘：这一件是「可能买到」而不是「确认买到」）",
             host.logs.any { it.contains("UNCONFIRMED") }
+        )
+    }
+
+    /**
+     * 攻击⑥（第二轮红队）：**刷新确认点到了「取消」** —— 弹窗关了，但列表一帧都没变。
+     *
+     * 引擎会记账（+3 天空石，保守方向对）、判未验证、退避、回到 SCAN，然后**又去刷新**：
+     * 一圈一圈直到预算上限耗尽。这条用例钉的是"必须有止损"：连续点错会把整晚挂机时间
+     * （情况 A：没花钱但记账虚高 → 提前停机）或整份天空石预算（情况 B：真花了钱）全部吃掉。
+     */
+    @Test
+    fun attack_refresh_confirm_lands_on_cancel_must_not_burn_forever() {
+        val (host, session) = runAttack(Attack.REFRESH_CONFIRM_MISSES)
+        val refreshes = session?.refreshes ?: 0
+        println("[RT] 刷新次数=" + refreshes + " 天空石=" + (session?.skystonesSpent ?: 0) +
+            " 点击=" + host.taps + " 截图=" + host.shots)
+        assertTrue("确认点击应当发生过", host.logs.any { it.contains("ALLOW refreshConfirm") } || host.taps >= 2)
+        assertTrue(
+            "刷新连续未验证必须有止损：不允许无限「刷新→记账→未验证→再刷新」，实际 refreshes=" + refreshes +
+                "\n最近日志：\n" + host.logs.takeLast(25).joinToString("\n"),
+            refreshes <= 6
         )
     }
 }

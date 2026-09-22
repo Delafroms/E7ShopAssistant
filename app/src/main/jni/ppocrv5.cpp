@@ -225,6 +225,13 @@ void PPOCRv5::set_target_size(int _target_size)
     target_size = _target_size;
 }
 
+void PPOCRv5::set_num_threads(int threads)
+{
+    // 只作用于 det（见头文件说明：rec 在任务级并行循环里，必须保持单线程）。
+    // 非正值回到默认 1，避免误传 0 让 ncnn 用"自动"线程数而偏离预期。
+    ppocrv5_det.opt.num_threads = (threads > 0) ? threads : 1;
+}
+
 int PPOCRv5::detect(const cv::Mat& rgb, std::vector<Object>& objects)
 {
     // DO NOT call cv::setNumThreads(get_big_cpu_count()) here! opencv's

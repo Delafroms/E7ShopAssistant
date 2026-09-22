@@ -124,8 +124,25 @@ internal val NET_ERR_KW = listOf("网络连接异常", "请重新连接")
  * 现在只认「点击重试」；读不到就退化为点弹窗中心。
  */
 internal val RETRY_KW = listOf("点击重试")
+
+/**
+ * 商人对话面板的特征台词（2026-09-22 真机事故驱动）。
+ *
+ * 面板打开时里面会显示商品名（实测出现「圣约书签」），OCR 把它当成商品行候选 →
+ * 生成假候选（cy≈200，实际是面板文字，不是列表行）；配合当时的容差放大就点到了
+ * 非目标商品（熔岩陆龟）的购买按钮。面板是覆盖层，检测到台词时本帧**只信 YOLO 图标框**。
+ */
+internal val MERCHANT_TALK_KW = listOf("这里应有尽有", "说说看", "你想买什么", "欢迎光临")
 internal val BUY_KW = listOf("购买", "購買", "buy", "purchase", "購入")
 private val BUY_TITLE_KW = listOf("购买商品", "購買商品", "确定要购买", "確定要購買", "是否购买", "是否購買", "confirm purchase")
+
+/**
+ * 「可购买 N 次」这类**商品信息**文本（含"购买"二字，但不是按钮）。
+ *
+ * 2026-09-22 修复：按钮定位的语义锚点原先只按 [BUY_KW] 过滤，会命中它 ——
+ * 于是色块窗口锚在商品名区域，质心落到非按钮位置（真机表现：点击落空 + 12 秒 DIALOG TIMEOUT）。
+ */
+internal val BUY_COUNT_KW = listOf("可购买", "可購買", "剩余可购买")
 internal val REFRESH_BTN_KW = listOf("立即更新", "refresh", "更新")
 internal val SOLD_KW = listOf(
     "售罄", "缺货", "缺貨", "sold", "已售", "售空", "售完", "已售完", "soldout", "品切れ"
@@ -354,6 +371,8 @@ internal fun rowSoldOut(r: DetectionResult, cy: Float, tol: Float): Boolean =
  * 正确顺序是：先证明 fingerprint 变了，再证明它稳定了。
  */
 fun frameFingerprint(r: DetectionResult): String {
+    // C1 埋点：每帧都要遍历全部文本行做哈希，是被怀疑的 CPU 小头之一
+    val t0 = System.currentTimeMillis()
     val sb = StringBuilder()
     for (c in r.candidates.sortedBy { it.cy }) {
         sb.append(c.kind).append('@').append(c.rowY / 12).append(';')
@@ -362,6 +381,7 @@ fun frameFingerprint(r: DetectionResult): String {
     for (l in r.lines.sortedBy { it.cy }) {
         sb.append(norm(l.text)).append(',')
     }
+    com.e7.shop.device.Profiler.record("fingerprint", System.currentTimeMillis() - t0)
     return sb.toString().hashCode().toString()
 }
 
@@ -441,33 +461,175 @@ fun didScroll(a: Bitmap, b: Bitmap): Boolean {
     }
 }
 
-/** 购买弹窗三重验证（S4，全 AND）：商品名 + 图标旁证 + 价格严格唯一匹配。 */
+/**
+ * 两帧是否几乎完全相同 —— 用于判断"上一次的识别结果能否直接复用"。
+ *
+ * 与 [didScroll] 的分工：那个回答"画面动没动"（阈值 6%，服务滚动判定）；
+ * 这个回答"画面是否**完全相同**"（阈值极小），只有几乎相同才敢复用 OCR/YOLO 结果。
+ *
+ * **保守是刻意的**：判"不同"只是多花一次识别（行为与优化前完全一致）；
+ * 判"相同"却判错，就会拿旧画面的结果做决策 —— 那是漏买/误买的来源。
+ * 所以尺寸不符、采样异常等任何拿不准的情况一律返回 false。
+ *
+ * 采样方式与 [didScroll] 同思路（按行取像素 + 隔点比较），避免 getPixel 的逐点 JNI 开销。
+ */
+fun frameNearlyIdentical(a: Bitmap, b: Bitmap): Boolean {
+    return try {
+        val w = a.width
+        val h = a.height
+        if (b.width != w || b.height != h) return false
+        val rowA = IntArray(w)
+        val rowB = IntArray(w)
+        var diff = 0
+        var total = 0
+        var y = 0
+        while (y < h) {
+            a.getPixels(rowA, 0, w, 0, y, w, 1)
+            b.getPixels(rowB, 0, w, 0, y, w, 1)
+            var x = 0
+            while (x < w) {
+                val p1 = rowA[x]
+                val p2 = rowB[x]
+                if (p1 != p2) {
+                    val d = kotlin.math.abs((p1 shr 16 and 0xFF) - (p2 shr 16 and 0xFF)) +
+                        kotlin.math.abs((p1 shr 8 and 0xFF) - (p2 shr 8 and 0xFF)) +
+                        kotlin.math.abs((p1 and 0xFF) - (p2 and 0xFF))
+                    if (d > Tuning.FRAME_IDENTICAL_PIXEL_DIFF) diff++
+                }
+                total++
+                x += Tuning.FRAME_IDENTICAL_STEP
+            }
+            y += Tuning.FRAME_IDENTICAL_ROW_STEP
+        }
+        total > 0 && diff.toFloat() / total <= Tuning.FRAME_IDENTICAL_RATIO
+    } catch (e: Throwable) {
+        // 拿不准就不复用：退回"重新识别"，行为与优化前一致
+        android.util.Log.w("E7SA.Percep", "frameNearlyIdentical failed: " + e.javaClass.simpleName)
+        false
+    }
+}
+
+/* ---- 弹窗内容区（2026-09-20 活锁修复） ----
+ *
+ * 购买弹窗是**盖在商店列表上的对话框**：弹窗外的列表行仍会被 OCR 完整读到。
+ * 三重验证若直接在整帧文本上做，弹窗外那一行就会污染判据。2026-09-20 生产日志
+ * 实测：玩家要点的那件誓约书签就在弹窗下方仍可见 → 整帧里 184000 出现两次
+ * （弹窗内一次 + 列表行一次）→「价格唯一匹配」100% 失败 → 一夜 2472 次
+ * 「买 → 取消 → 再买」活锁（只买到 8 件、4.4 小时满速空转、手机严重发烫）。
+ */
+
+/**
+ * 弹窗锚点 y：优先取模型的取消/确认按钮框（弹窗独有，实测置信度稳定在 0.98），
+ * 回退到 OCR 读到的「取消」行（列表行里没有"取消"二字）。
+ *
+ * 两者都读不到时返回 null —— 调用方必须按"无法验证"处理，**绝不退回整帧**。
+ */
+internal fun dialogAnchorY(r: DetectionResult): Float? {
+    val btn = r.yoloBoxes.filter {
+        (it.clsName == "cancel_button" || it.clsName == "confirm_button") &&
+            it.prob >= Tuning.MODEL_BUTTON_CONF
+    }
+    if (btn.isNotEmpty()) return btn.map { it.cy }.average().toFloat()
+    return r.lines.filter { hasAny(it.text, CANCEL_KW) }.minByOrNull { it.cx }?.cy
+}
+
+/** 弹窗内容区的 y 范围；锚点读不到返回 null。 */
+private fun dialogWindow(r: DetectionResult, imgH: Int): ClosedFloatingPointRange<Float>? {
+    val anchor = dialogAnchorY(r) ?: return null
+    return (anchor - imgH * Tuning.DIALOG_WIN_UP)..(anchor + imgH * Tuning.DIALOG_WIN_DOWN)
+}
+
+/**
+ * 弹窗内容区内的文本行；锚点读不到时返回 null（= 无法验证，fail-closed）。
+ *
+ * **绝不退回整帧**：整帧扫描既能造出 2026-09-20 那种活锁（弹窗外同价行让判据失败），
+ * 也能在点错行时把弹窗外的列表行当成"弹窗证据"而**误买**（不可逆的真金白银损失）。
+ *
+ * 同时供"弹窗里到底是什么商品"（[dialogItemKind]）判定使用 —— 那个判定若看整帧，
+ * 弹窗外的另一种商品行会让引擎误判"点错行"而放弃一个本来能买到的目标（漏买）。
+ */
+fun dialogLines(r: DetectionResult, imgH: Int): List<PpOcr.OcrLine>? =
+    dialogWindow(r, imgH)?.let { w -> r.lines.filter { it.cy in w } }
+
+/** 购买弹窗三重验证（S4，全 AND）：商品名 + 图标旁证 + 价格匹配，**全部限定在弹窗内容区内**。 */
 fun dialogConfirmed(r: DetectionResult, bmp: Bitmap, kind: String): Boolean {
-    val textOk = r.lines.any { it.prob >= Tuning.OCR_TEXT_CONF && itemKind(it.text) == kind }
-    val yoloOk = r.yoloBoxes.any { yoloKind(it) == kind }
-    val nameLine = r.lines.firstOrNull { itemKind(it.text) == kind }
+    val win = dialogWindow(r, bmp.height) ?: return false
+    val lines = r.lines.filter { it.cy in win }
+    val boxes = r.yoloBoxes.filter { it.cy in win }
+    val textOk = lines.any { it.prob >= Tuning.OCR_TEXT_CONF && itemKind(it.text) == kind }
+    val yoloOk = boxes.any { yoloKind(it) == kind }
+    val nameLine = lines.firstOrNull { itemKind(it.text) == kind }
     val iconOk = yoloOk || (nameLine != null && (
         iconColorRatio(bmp, nameLine.cx, nameLine.cy, kind) >= ICON_RATIO_MIN ||
             iconColorRatio(bmp, nameLine.cx, nameLine.cy, kind, wide = true) >= ICON_RATIO_MIN
         ))
-    return textOk && iconOk && priceMatches(r, kind)
+    return textOk && iconOk && priceMatches(lines, kind)
 }
 
-/** 价格严格匹配：唯一一条 6 位数字行等于期望价格（歧义 -> 拒绝）。 */
-fun priceMatches(r: DetectionResult, kind: String): Boolean {
+/**
+ * 价格匹配：弹窗内容区内出现期望价格即通过。
+ *
+ * **判据从「严格唯一」改为「出现即可」**（2026-09-20 生产日志驱动）。
+ * 旧判据要求全帧恰好一条 6 位数字等于期望价格；但弹窗盖在列表上，玩家要点的
+ * 那一行往往仍在弹窗下方可见 —— 同一个价格被读到两次，判据必然失败。
+ * 实测那一夜：2472 次「买 → 取消 → 再买」、只买到 8 件、4.4 小时满速空转。
+ *
+ * 语义纠正：**同一价格的重复不是歧义**（两处 184000 都指向誓约书签）；
+ * 真正的歧义是"弹窗里其实是另一种商品"，那由 [dialogConfirmed] 的 textOk
+ * （弹窗内必须读到目标商品名）挡住。旧判据恰好两头都错：
+ *  · 同价重复被拒 → 活锁（本次事故）；
+ *  · 184000 与 280000 同屏这种真歧义反被放行 —— 旧实现只把**等于期望价**的计入
+ *    候选，280000 根本不进统计，于是"唯一一条"照样成立。
+ *
+ * 调用方必须传入**弹窗内容区**内的行（见 [dialogLines]）；传整帧会重新引入污染。
+ */
+fun priceMatches(lines: List<PpOcr.OcrLine>, kind: String): Boolean {
     val expect = if (kind == "bookmark") Tuning.BOOKMARK_PRICE.toString()
     else Tuning.MEDAL_PRICE.toString()
-    val candidates = r.lines.mapNotNull { l ->
+    return lines.any { l ->
         val d = l.text.filter { it.isDigit() }
-        if (d.length == 6) d else null
-    }.filter { it == expect }
-    return candidates.size == 1
+        d.length == 6 && d == expect
+    }
 }
 
 /* ================= YOLO Engine ================= */
 
 class YoloEngine : RecognitionEngine {
     override val id = "yolo"
+
+    /** 上次亮度增强重试的时间（A5 限频：每 5 秒最多一次，避免拖慢正常帧）。 */
+    private var lastEnhanceAt = 0L
+
+    /**
+     * 亮度增强（Gamma 0.6，查表法，一次像素遍历）。
+     *
+     * 用途（A5，2026-09-22）：售空/暗色图标在原始帧上的检测置信度只有 0.23
+     * （实测 140720：原始帧 conf < 0.05 完全漏检，增强后可检出）——
+     * 因为售空后图标失去蓝金特征色、整体变暗。只在「零图标候选」的帧调用。
+     */
+    private fun enhanceBrightness(src: Bitmap): Bitmap? {
+        return try {
+            val w = src.width
+            val h = src.height
+            val px = IntArray(w * h)
+            src.getPixels(px, 0, w, 0, 0, w, h)
+            val lut = IntArray(256) { i ->
+                (255.0 * Math.pow(i / 255.0, 0.6)).toInt().coerceIn(0, 255)
+            }
+            for (i in px.indices) {
+                val c = px[i]
+                val r = lut[(c shr 16) and 0xFF]
+                val g = lut[(c shr 8) and 0xFF]
+                val b = lut[c and 0xFF]
+                px[i] = (c and -0x1000000) or (r shl 16) or (g shl 8) or b
+            }
+            val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            out.setPixels(px, 0, w, 0, 0, w, h)
+            out
+        } catch (e: Throwable) {
+            null
+        }
+    }
 
     /** 睡眠模式：见 RecognitionEngine.sleepMode。打开后 hasIconFast 强制返回 true。 */
     override var sleepMode: Boolean = false
@@ -515,13 +677,48 @@ class YoloEngine : RecognitionEngine {
             raw.add(Candidate(kind, b.cx, b.cy, b.prob, rowTol(lines, bmp.height),
                 listOf("yolo-box ${b.clsName} prob=${"%.2f".format(b.prob)}")))
         }
+        // ⚠ 2026-09-22 回退（有真机证据）：这里曾改成 rowTol（103px），但它引入了误点 ——
+        // 商店顶部是商人 NPC 区域，那里的「圣约书签」文字会生成假候选 cy≈200；
+        // tol=103 让它够到了第 1 行（熔岩陆龟等非目标商品）的购买按钮 y=277（差 77px），
+        // 于是机器人点了非目标商品、弹出怪物的购买界面（真机 21:10:28 实测）。
+        // 回到 0.045h（1272 高屏上 57px）：假候选够不着任何真实按钮，宁可 fail-closed 不点。
+        // 教训：当初「OCR 候选够不着按钮」的结论建立在误判上 —— y=199 本身就是假候选。
+        // 商人对话面板打开时，面板里的商品名不是列表行 —— 本帧丢弃全部 OCR 候选，
+        // 只信 YOLO 图标框（2026-09-22 真机事故：面板里的「圣约书签」文字生成了假候选）。
+        val merchantPanel = lines.any { hasAny(it.text, MERCHANT_TALK_KW) }
+        val ocrTol = bmp.height * Tuning.ROW_TOL_FALLBACK
         for (l in lines) {
             val kind = itemKind(l.text) ?: continue
             if (hasAny(l.text, SOLD_KW)) continue
-            raw.add(Candidate(kind, l.cx, l.cy, l.prob * Tuning.ICON_CONF_WEIGHT, bmp.height * Tuning.ROW_TOL_FALLBACK,
+            if (merchantPanel) continue
+            raw.add(Candidate(kind, l.cx, l.cy, l.prob * Tuning.ICON_CONF_WEIGHT, ocrTol,
                 listOf("ocr-name ${l.text}@${(l.prob * 100).toInt()}")))
         }
-        val candidates = mergeCandidates(raw)
+        var candidates = mergeCandidates(raw)
+        // ⚠ 2026-09-22 新增（A5，召回优先）：零图标候选时做一次亮度增强重试。
+        // 依据：售空书签在原始帧 conf < 0.05 完全漏检，Gamma 增强后能到 0.23。
+        // 限频 5 秒一次 —— 增强约 30~80ms 加一次 YOLO 约 250ms，不加限频会拖慢正常帧。
+        if (candidates.none { it.kind == "bookmark" || it.kind == "medal" }) {
+            val now = System.currentTimeMillis()
+            if (now - lastEnhanceAt > 5000L) {
+                lastEnhanceAt = now
+                val bright = enhanceBrightness(bmp)
+                if (bright != null) {
+                    val boxes2 = YoloDet.detect(bright)
+                    bright.recycle()
+                    val raw2 = ArrayList<Candidate>(raw)
+                    for (b in boxes2) {
+                        if (b.prob < Tuning.ICON_CONF_FULL) continue
+                        val kind = yoloKind(b) ?: continue
+                        raw2.add(
+                            Candidate(kind, b.cx, b.cy, b.prob, rowTol(lines, bmp.height),
+                                listOf("yolo-box-bright " + b.clsName + " prob=" + "%.2f".format(b.prob)))
+                        )
+                    }
+                    candidates = mergeCandidates(raw2)
+                }
+            }
+        }
         // 耗时分解（性能优化前必须先知道钱花在哪）：ocr = PP-OCR det+rec，yolo = ncnn 推理
         // 另加候选漏斗 raw(合并前) → cands(合并后)：实机出现"识别到 60 个文本框却 0 候选"时，
         // 靠它区分是「YOLO 没出框」还是「OCR 商品名没匹配上」还是「合并阶段被剔除」。

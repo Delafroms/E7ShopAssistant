@@ -47,10 +47,18 @@
     <string name="auto_lock_on_done">预算用完后自动熄屏</string>
     <string name="acc_exempt">无障碍保活豁免（只影响本应用）</string>
     <string name="speed_mult">运行速度倍数 1-3（越快循环越快，收益相同）</string>
+    <string name="infer_threads">推理线程数 1-8（实测 2 最快，4 以上无收益）</string>
+    <string name="max_run_minutes">最长运行时长（分钟，0=不限；到点无条件停止）</string>
+    <string name="err_run_time">已达运行时长上限（%1$d 分钟）</string>
+    <string name="icon_choice">桌面图标</string>
+    <string name="icon_default">现有图标</string>
+    <string name="icon_e7">E7SA 专属</string>
+    <string name="icon_ba">Blue Archive 风</string>
     <string name="ocr_engine">识图引擎</string>
     <string name="appearance_dark">Steam · 深色卡片</string>
     <string name="appearance_oled">Steam · OLED 纯黑</string>
     <string name="appearance_ba">Blue Archive · 明亮学院</string>
+    <string name="appearance_deepseek">DeepSeek · 深蓝卡片</string>
     <string name="changelog">更新日志</string>
     <string name="humanize_settings">拟人化设置（降低检测风险）</string>
     <string name="delay_min">操作间隔下限(ms)</string>

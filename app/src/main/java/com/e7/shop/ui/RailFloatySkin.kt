@@ -426,7 +426,7 @@ internal class RailFloatySkin(private val ctx: Context) : FloatySkin {
         var downX = 0f
         var downY = 0f
         var moved = false
-        return View.OnTouchListener { _, ev ->
+        return View.OnTouchListener { v, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = ev.rawX; downY = ev.rawY; moved = false
@@ -442,10 +442,22 @@ internal class RailFloatySkin(private val ctx: Context) : FloatySkin {
                     }
                     true
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP -> {
+                    // ⚠ 关键修复（2026-09-20）：没拖动就是点击，必须**主动**触发。
+                    //
+                    // 旧版这里写"拖动结束不触发点击：交给 View 自身的 click 判定"并返回 false
+                    // —— 那是错的：本监听器在 ACTION_DOWN 已经返回 true **消费**了事件，
+                    // View.onTouchEvent 不再被调用，于是 OnClickListener 的 DOWN→UP 检测链
+                    // 永远建立不起来，`setOnClickListener { host.onToggleExpand() }` 形同虚设。
+                    // 玩家看到的就是 BA 主题悬浮窗「点了没反应、不出详情面板」（假开关）。
+                    // 经典户型（FloatyController.attachDrag）在同一位置是对的：`if (!dragged) tap()`。
+                    if (moved) host.onDragEnd() else v.performClick()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    // 取消（被父容器抢走 / 来电等）：只收尾拖拽，绝不触发点击
                     if (moved) host.onDragEnd()
-                    // 拖动结束不触发点击：交给 View 自身的 click 判定
-                    false
+                    true
                 }
                 else -> false
             }

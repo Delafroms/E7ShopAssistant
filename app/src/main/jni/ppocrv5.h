@@ -44,6 +44,19 @@ public:
 
     void set_target_size(int target_size);
 
+    /**
+     * 运行时设置推理线程数（2026-09-20 新增，用于"线程数 vs 单帧耗时"对比实验）。
+     *
+     * ⚠ **只作用于 det**。rec 必须保持单线程：它的调用点在
+     * [detect_and_recognize] 的 `#pragma omp parallel for
+     * num_threads(ncnn::get_big_cpu_count())` 里（任务级并行，多个文本框同时识别），
+     * 若每个并行任务内部再开 t 个算子线程，总线程数会变成"大核数 × t"，
+     * 远超物理核心数 —— 只会带来调度开销与更差的能效。
+     *
+     * 非正值一律回到默认 1。
+     */
+    void set_num_threads(int threads);
+
     int detect(const cv::Mat& rgb, std::vector<Object>& objects);
 
     int recognize(const cv::Mat& rgb, Object& object);

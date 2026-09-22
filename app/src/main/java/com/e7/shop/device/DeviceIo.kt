@@ -35,7 +35,6 @@ class DeviceIo(
     private val onShotResult: (ok: Boolean) -> Unit
 ) {
 
-    private var lastDebugSaveAt = 0L
 
     /**
      * 截取当前屏幕。
@@ -44,22 +43,18 @@ class DeviceIo(
      * 同时通过 [onShotResult] 上报健康度，供悬浮窗显示"截图正常/失败"。
      */
     fun screenshot(): Bitmap? {
+        val t0 = System.currentTimeMillis()
         val bmp = if (Build.VERSION.SDK_INT >= 30) takeScreenshotInternal() else null
+        val t1 = System.currentTimeMillis()
         onShotResult(bmp != null)
-        // 调试 PNG 改为**时间节流**（≥8 秒一张）：旧版每 5 帧压缩一张 2800×1272 PNG，
-        // 在机器人线程上耗时数百毫秒，既拖慢循环又干扰「连续两帧无变化」的稳定判定
-        val now = System.currentTimeMillis()
-        if (bmp != null && now - lastDebugSaveAt > DEBUG_SAVE_INTERVAL_MS) {
-            lastDebugSaveAt = now
-            try {
-                FileOutputStream(File(filesDir, DEBUG_FRAME_NAME)).use { fos ->
-                    bmp.compress(Bitmap.CompressFormat.PNG, 80, fos)
-                }
-            } catch (e: Exception) {
-                // 调试帧写不出去绝不影响机器人：它只是排查用的副产品
-                Log.w(TAG, "debug frame not saved: " + e.message)
-            }
-        }
+        // 2026-09-22 删除「调试帧 PNG 压缩」（原为 ≥8 秒一张）：
+        // C1 实测它占墙上时间 6.7%、每帧约 308ms —— 而每帧总成本约 1016ms，
+        // 也就是说 30% 的取帧时间花在一个纯排查用的副产品上。关掉零功能影响。
+        // 需要逐帧画面时改用 DiagnosticsRunner 采集或 adb screencap，不再挂在主循环上。
+        //
+        // 分项计时（2026-09-21，为查"CPU 130 分钟去向"）：
+        //  · grab = 截图全流程（含 GPU→CPU 回读 14.2MB 的 copy）
+        Profiler.record("grab", t1 - t0)
         return bmp
     }
 
@@ -153,7 +148,11 @@ class DeviceIo(
      */
     fun sleepMs(ms: Long) {
         try {
-            Thread.sleep((ms.toDouble() / speedMult()).toLong().coerceAtLeast(MIN_SLEEP_MS))
+            val t = (ms.toDouble() / speedMult()).toLong().coerceAtLeast(MIN_SLEEP_MS)
+            // C1（2026-09-22）：把「等待」也计入窗口。实测每帧成本降了 33% 而吞吐没涨，
+            // 说明瓶颈在等待而不是计算 —— 不让等待可见就永远在优化错的东西。
+            Profiler.record("sleep", t)
+            Thread.sleep(t)
         } catch (e: InterruptedException) {
             // 被 stopBot 打断是正常控制流：恢复中断标志让上层循环退出
             Thread.currentThread().interrupt()

@@ -128,6 +128,17 @@ class ClickPlanner {
      * 无文本锚点时扫描行右侧按钮带。所有坐标由当前帧推导。
      */
     fun rowButtonState(bmp: Bitmap, r: DetectionResult, cy: Float, tol: Float): Loc {
+        // C1 埋点（2026-09-22）：色块扫描是纯逐像素计算，属 bot 线程未归属时间的头号嫌疑。
+        // 用包装层而不是在 3 个调用点各埋一次 —— 调用点会变，包一层不会漏。
+        val t0 = System.currentTimeMillis()
+        try {
+            return rowButtonStateInner(bmp, r, cy, tol)
+        } finally {
+            com.e7.shop.device.Profiler.record("rowButton", System.currentTimeMillis() - t0)
+        }
+    }
+
+    private fun rowButtonStateInner(bmp: Bitmap, r: DetectionResult, cy: Float, tol: Float): Loc {
         val w = bmp.width
         val h = bmp.height
 
@@ -139,10 +150,18 @@ class ClickPlanner {
 
         val ry = (tol * Tuning.BTN_WIN_RY_FROM_TOL).toInt()
             .coerceAtLeast((h * Tuning.BTN_WIN_RY_MIN).toInt())
-        val txtLine = r.lines.firstOrNull {
-            kotlin.math.abs(it.cy - cy) < tol &&
-                (hasAny(it.text, BUY_KW) || hasAny(it.text, SOLD_KW))
-        }
+        // 语义锚点：只认「购买 / 售空」按钮文本。
+        //  · 排除「可购买1次」这类商品信息（含"购买"二字却不是按钮）——
+        //    2026-09-22 修复：它会把色块窗口锚在商品名区域，质心偏到非按钮位置，
+        //    真机表现为点击落空 + 12 秒 DIALOG TIMEOUT。
+        //  · 同 y 命中多条时取最右：真按钮在列表行右侧。
+        val txtLine = r.lines
+            .filter {
+                kotlin.math.abs(it.cy - cy) < tol &&
+                    (hasAny(it.text, BUY_KW) || hasAny(it.text, SOLD_KW)) &&
+                    !hasAny(it.text, BUY_COUNT_KW)
+            }
+            .maxByOrNull { it.cx }
         val x1: Int
         val x2: Int
         val y1: Int

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  E7SA 专属图标 · 背景层（2026-09-20 新增）
+  深蓝对角渐变：与 DeepSeek 主题同源的冷色调，但更沉，保证白色/亮蓝前景有足够对比。
+  纯矢量，无位图，任何密度都清晰、体积为零。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="108" android:endY="108"
+                android:startColor="#1E3A8A"
+                android:endColor="#0B1220" />
+        </aapt:attr>
+    </path>
+</vector>

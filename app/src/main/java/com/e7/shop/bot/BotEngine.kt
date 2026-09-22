@@ -124,6 +124,9 @@ class BotEngine(
     /** 未决预算计数：连续"无法确定下一步"的次数，正常推进时清零。 */
     private var undecidedStreak = 0
 
+    /** 刷新"点下但列表没变"的连续次数（第二轮红队 R1 止损，见 Tuning.REFRESH_UNVERIFIED_MAX_STREAK）。 */
+    private var refreshUnverifiedStreak = 0
+
     /* ---- 会话级感知统计：结束时给出「看见多少 / 买到多少 / 被谁丢了多少」----
      * 这是漏买复盘的量化入口：只有"识别到的候选数"和"实际买到数"能对上，
      * 才能证明没有漏买；对不上时，两个 drop 计数直接指出是被谁丢的。 */
@@ -190,7 +193,8 @@ class BotEngine(
                 "E7SA.Summary",
                 "seen=$seenCandidates bought=${session.bookmarksGot + session.medalsGot} " +
                     "refreshes=${session.refreshes} sky=${session.skystonesSpent} gold=${session.goldSpent} " +
-                    "dropHandledRow=$droppedByHandledRow dropKindDisabled=$droppedByKindDisabled"
+                    "dropHandledRow=$droppedByHandledRow dropKindDisabled=$droppedByKindDisabled " +
+                    "reusedFrames=$reusedFrames（复用识别结果省下的完整识别次数）"
             )
             host.commitSession(session)
             host.finish()
@@ -201,7 +205,17 @@ class BotEngine(
 
     private fun shot(): Pair<Bitmap, DetectionResult>? {
         val b = host.screenshot() ?: return null
+        // C1 分项计时（2026-09-22）：识别是 CPU 大户的头号嫌疑，按窗口计量才能定位。
+        // 同时记录这一段的进程 CPU 时间：并行度 = analyzeCpu / analyze ——
+        // 它才是"CPU 时间去哪了"的直接答案（墙上时间不是同量纲）。
+        val t0 = System.currentTimeMillis()
+        val cpu0 = com.e7.shop.device.Profiler.cpuMs()
         val r = engine.analyze(b)
+        val wall = System.currentTimeMillis() - t0
+        val cpu = com.e7.shop.device.Profiler.cpuMs() - cpu0
+        com.e7.shop.device.Profiler.record("analyze", wall)
+        if (cpu > 0) com.e7.shop.device.Profiler.record("analyzeCpu", cpu)
+        com.e7.shop.device.Profiler.count("shot")
         dbgCount++
         // 帧级感知追踪（漏买复盘的核心证据，见 PerceptionTrace.kt）：
         //  · 有候选的帧**必记** —— 这是"系统看见了目标"的关键帧，漏了就没法复盘；
@@ -223,11 +237,30 @@ class BotEngine(
     }
 
     private fun capsReached(s: RecordStore.Session): Boolean {
+        // 运行时长到点（2026-09-20 新增）：与"持有量达标"同属正常收工。
+        // 放在这里而不是每个调用点，是为了让全部检查点一次覆盖、不可能遗漏。
+        if (runTimeReached(s)) return true
         val c = host.cfg
         val hit = (c.bookmarkCap > 0 && s.bookmarksGot >= c.bookmarkCap) ||
             (c.medalCap > 0 && s.medalsGot >= c.medalCap)
         if (hit) host.markCompleted()   // 持有量达标 = 正常完成任务（允许自动熄屏）
         return hit
+    }
+
+    /**
+     * 运行时长到点（[com.e7.shop.data.AppConfig.maxRunMinutes] 分钟，0 = 不限）。
+     *
+     * 与持有量达标**同层**：都属于正常收工 —— 走 markCompleted 路径，
+     * 因此 autoLockOnDone 对它同样生效；异常中止不熄屏（玩家需要看屏幕排查）。
+     */
+    private fun runTimeReached(s: RecordStore.Session): Boolean {
+        val limit = host.cfg.maxRunMinutes
+        if (limit <= 0) return false
+        val runMin = (System.currentTimeMillis() - s.startTime) / 60000.0
+        if (runMin < limit) return false
+        host.setError(host.str(R.string.err_run_time, limit))
+        host.markCompleted()
+        return true
     }
 
     private fun kindEnabled(kind: String): Boolean =
@@ -279,28 +312,35 @@ class BotEngine(
         val p = shot() ?: run { waitReason = "WAIT_FOR_SCREENSHOT"; return Phase.WAIT }
         host.setStage(Stage.CHECKING)
         val scene = p.second.scene
-        recycle(p.first)
         host.log("E7SA.Scene", "scene=$scene")
         return when (scene) {
             Scene.SHOP_LIST -> {
                 waitStreak = 0
                 recoverStreak = 0
+                // 这一帧的识别结果交给紧接着的 SHOP_SCAN 复用（见 pendingSnap）：
+                // 两者之间没有任何动作，画面不可能变，再识别一次纯属浪费。
+                pendingSnap = p.second
+                recycle(p.first)
                 Phase.SHOP_SCAN
             }
             Scene.REFRESH_DLG -> {
+                recycle(p.first)
                 host.setError(host.str(R.string.err_recover_refresh_dlg))
                 Phase.RECOVER
             }
             Scene.BUY_DLG -> {
+                recycle(p.first)
                 host.setError(host.str(R.string.err_recover_buy_dlg))
                 Phase.RECOVER
             }
             Scene.NET_ERROR -> {
                 // 网络异常弹窗（2026-09-19）：点「点击重试」后回到 SCAN 继续
+                recycle(p.first)
                 host.setError(host.str(R.string.err_net_error))
                 Phase.RETRY_NET
             }
             Scene.OTHER -> {
+                recycle(p.first)
                 waitReason = "WAIT_FOR_SCENE"
                 Phase.WAIT
             }
@@ -382,8 +422,13 @@ class BotEngine(
             else -> null
         }
         if (cancelPt != null) {
-            host.log("E7SA.Tap", "recoverCancel tap=(${cancelPt.first.toInt()},${cancelPt.second.toInt()})")
+            host.log("E7SA.Tap", "recoverCancel tap=" + cancelPt.first.toInt() + "," + cancelPt.second.toInt())
             guardedTap(cancelPt.first, cancelPt.second, "recoverCancel")
+        } else {
+            // ⚠ 2026-09-22（与 AiBotEngine 同步）：找不到「取消」按钮时退化为 BACK，
+            // 否则 RECOVER 会空转到退避耗尽（真机在非预期弹窗上卡了 2 分钟）。
+            host.log("E7SA.Recover", "取消按钮未找到 -> 退化为 BACK 关闭弹窗")
+            host.pressBack()
         }
         recycle(p.first)
         host.sleepMs(Tuning.SETTLE_AFTER_RECYCLE_MS)
@@ -397,10 +442,19 @@ class BotEngine(
      * 任何购买失败/截图失败都不刷新越过未确认的画面。
      */
     private fun doShopScan(session: RecordStore.Session): Phase {
-        if (capsReached(session)) return Phase.DONE
-        val p = shot() ?: return Phase.SCAN
-        val snap = p.second
-        recycle(p.first)
+        if (capsReached(session)) { pendingSnap = null; return Phase.DONE }
+        // 优先复用 doScan 刚识别过的结果（见 pendingSnap）：两者之间没有任何动作，
+        // 画面不可能变。没有缓存时（本阶段也可由其它路径进入）才自己取帧，
+        // 行为与优化前完全一致。
+        val cached = pendingSnap
+        pendingSnap = null
+        val snap = cached ?: run {
+            val p = shot() ?: return Phase.SCAN
+            val s = p.second
+            recycle(p.first)
+            s
+        }
+        if (cached != null) reusedFrames++
         when (snap.scene) {
             Scene.REFRESH_DLG -> {
                 host.setError(host.str(R.string.err_recover_refresh_dlg))
@@ -658,6 +712,24 @@ class BotEngine(
      */
     private val rowVerifyAttempts = HashMap<Int, Int>()
 
+    /**
+     * 上一次 SCAN 的识别结果，供紧接着的 SHOP_SCAN 复用（2026-09-20 功耗优化）。
+     *
+     * **为什么**：doScan 已经完整识别了一帧（OCR + YOLO），却只用 scene 做路由就把结果丢掉，
+     * 紧接着 doShopScan 又对**同一画面**重新识别一遍 —— 中间没有任何动作，画面不可能变。
+     * 这与 AiBotEngine.pendingFrame 是同一处浪费（那边实测占全部完整识别的 40%）。
+     *
+     * 只缓存 [DetectionResult]（不持有 Bitmap）：SHOP_SCAN 的决策只需要识别结果，
+     * 像素数据在 doScan 里就已回收，所以这里没有额外的内存占用。
+     *
+     * 安全性：一设一取严格配对；SHOP_SCAN 仍会自行校验 `scene == SHOP_LIST`
+     * （见 doShopScan），所以即使缓存意外过期也不会拿旧画面做决策。
+     */
+    private var pendingSnap: DetectionResult? = null
+
+    /** 复用缓存而省下的完整识别次数（2026-09-20 功耗优化的可验证指标，随 Summary 输出）。 */
+    private var reusedFrames = 0
+
     private fun noteRowFailure(t: Candidate) {
         val n = (rowAttempts[t.rowY] ?: 0) + 1
         rowAttempts[t.rowY] = n
@@ -800,7 +872,9 @@ class BotEngine(
             //  · 弹窗里的商品名**明确是别的东西** → 点错了行（定位错误），重试无意义 → 立即放弃该行，
             //    否则会陷入"点错 → 取消 → 再点错"的活锁（实测：奖牌在第2栏却点第1栏，反复循环）
             //  · 商品名读不到、或读到的与目标一致（只是价格/图标没通过）→ 暂时性失败 → 走重试预算
-            val dlgKind = dialogItemKind(dlg.second.lines)
+            // ⚠ 只看**弹窗内容区**（2026-09-20）：整帧里弹窗外的列表行会让这里误判
+            // "点错行"而放弃一个本来能买到的目标（漏买）。
+            val dlgKind = dialogLines(dlg.second, dlg.first.height)?.let { dialogItemKind(it) }
             if (dlgKind != null && dlgKind != t.kind) {
                 host.handledAdd(t.rowY)
                 host.setError(host.str(R.string.err_row_wrong_target, t.kind, t.rowY))
@@ -971,16 +1045,38 @@ class BotEngine(
             "REFRESH COMMIT refreshes=" + session.refreshes + " skySpent=" + session.skystonesSpent +
                 " gate=" + (if (tapped) "ALLOW" else "DENY")
         )
-        if (!waitRefreshed(beforeFp)) {
-            // 列表未确认变化：账已记（钱确实花了），但**不清空已处理行**
-            // —— 把旧列表当新列表会导致重复购买。回到观察重新判断，
-            // 并计入未决预算，避免"刷新→未验证→再刷新"的无限循环。
-            return undecided(host.str(R.string.err_refresh_unverified))
-        }
-        // 验证通过：新一轮商品，清空已处理行与重试预算
+        // ⚠ 位置记忆在这里就清（2026-09-21 漏买修复 P0-1，与 AI 引擎同一处修复）：
+        //
+        // 刷新已确认点下 → 列表必然换新 → 旧的 y 标记此刻失效。
+        // 旧版只在 waitRefreshed 成功后才清，于是**验证失败时标记残留**，
+        // 新列表落在同一行的商品会被当成"已处理"跳过 = 漏买。
+        //
+        // 提前清是安全的：即使刷新实际失败、列表没变，买过的商品按钮已变"售罄"，
+        // rowButtonState 返回 GRAY，点不了第二次 —— 不存在重复购买的风险。
         host.handledClear()
         rowAttempts.clear()
         rowVerifyAttempts.clear()
+        if (!waitRefreshed(beforeFp)) {
+            // 列表未确认变化：账已记（钱确实花了）。已处理行**已经清过** ——
+            // 这是刻意的：宁可让引擎重新评估一遍（买过的行是售罄，不会被重复买），
+            // 也不能让残留标记把新商品漏掉。回到观察重新判断，并计入未决预算。
+            //
+            // ⚠ 第二轮红队 R1（2026-09-22）：上面这句"避免无限循环"以前是假的 ——
+            // undecided 只退避不停机，下一轮 SHOP_SCAN 无目标又会走回刷新，
+            // 于是"刷新→记账→未验证→再刷新"真的能无限转（实测 44 次 / 132 颗天空石）。
+            // 现在加连续计数止损：连续 [Tuning.REFRESH_UNVERIFIED_MAX_STREAK] 次未验证即停机报错。
+            refreshUnverifiedStreak++
+            if (refreshUnverifiedStreak >= Tuning.REFRESH_UNVERIFIED_MAX_STREAK) {
+                host.setError(host.str(R.string.err_refresh_unverified))
+                host.log(
+                    "E7SA.State",
+                    "刷新连续未验证 x$refreshUnverifiedStreak -> 停机止损（疑似确认键点不中或网络异常，继续会持续消耗天空石）"
+                )
+                return Phase.DONE
+            }
+            return undecided(host.str(R.string.err_refresh_unverified))
+        }
+        refreshUnverifiedStreak = 0
         // 真正有进展 → 清空未决预算（否则"刷新成功但一直买不到"会被误判为未决而停）
         undecidedStreak = 0
         host.daze()
@@ -1002,6 +1098,8 @@ class BotEngine(
     private fun waitRefreshed(beforeFp: String): Boolean {
         var lastFp: String? = null
         var stable = 0
+        var lastRows = -1
+        var rowsStable = 0
         // 帧数 40 → 24：单帧成本约 0.9s（识别本身 0.64s），40 帧最坏要 45 秒，
         // 实测玩家感受就是"点了刷新之后等好久"。24 帧上限约 22 秒，够用且不再拖沓。
         // 时序自适应：按时间预算换算帧数（慢设备自动多给帧、快设备自动收紧）
@@ -1017,10 +1115,18 @@ class BotEngine(
             val fp = frameFingerprint(r)
             if (lastFp != null && fp == lastFp) stable++ else stable = 0
             lastFp = fp
+            // 2026-09-22（与 AiBotEngine 同口径）：整屏已加载才允许判刷新完成 ——
+            // 网络延迟时下面的格子先出来、第一格还在加载，只看"指纹变了 + 稳定"
+            // 会提前下滑 → 漏掉第一物品栏（玩家实测）。门槛 8 行 = 实测正常一屏 8~10 行。
+            val rows = r.lines.count { hasAny(it.text, BUY_KW) || hasAny(it.text, SOLD_KW) }
+            if (rows == lastRows) rowsStable++ else rowsStable = 0
+            lastRows = rows
             // stable >= 1 = 连续两帧一致即可。原先要求 3 帧（stable>=2）白等一帧约 1.2s；
             // "内容确实变了"由 fp != beforeFp 保证，"不再变化"由连续两帧一致保证，够稳。
-            if (fp != beforeFp && stable >= 1) {
-                host.log("E7SA.State", "refresh verified after ${i + 1} frames")
+            if (fp != beforeFp && stable >= 1 && r.scene == Scene.SHOP_LIST &&
+                rows >= 8 && rowsStable >= 2
+            ) {
+                host.log("E7SA.State", "refresh verified after " + (i + 1) + " frames (rows=" + rows + ")")
                 return true
             }
         }

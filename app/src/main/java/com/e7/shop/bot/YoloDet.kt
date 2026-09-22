@@ -60,6 +60,22 @@ object YoloDet {
     /** Returns one string per box: "class\tcx\tcy\tw\th\tprob" (original pixels). */
     @JvmStatic external fun nativeDetect(bitmap: Bitmap): Array<String>?
 
+    /**
+     * 运行时设置 YOLO 推理线程数（2026-09-20 新增，供"线程数 vs 单帧耗时"对比实验）。
+     * 返回实际生效值；**-1 表示模型尚未加载**（设置无效）。
+     *
+     * 默认值仍是 1（native `load()` 里设置），**生产路径不调用这个方法** ——
+     * 只有诊断对比会调，所以日常行为与加这个 API 之前完全一致。
+     *
+     * 为什么值得调：单线程时一个核以最高频率（=最高电压）满载，而功耗 ∝ 电压²×频率 ——
+     * "低频多核"通常比"高频单核"更省能量。但实际加速比与降温幅度必须实测，
+     * 不能靠推理（ncnn 的部分算子并行度有限）。
+     */
+    @JvmStatic external fun nativeSetThreads(threads: Int): Int
+
+    /** 设置推理线程数（0/负数 = 回到默认 1）。返回实际生效值，-1 = 模型未加载。 */
+    fun setThreads(n: Int): Int = try { nativeSetThreads(n) } catch (e: Throwable) { -1 }
+
     fun load(mgr: AssetManager): Boolean {
         readMeta(mgr)
         val ok = try { nativeLoad(mgr, imgsz) } catch (e: Throwable) { false }

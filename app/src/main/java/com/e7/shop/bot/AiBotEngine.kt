@@ -49,6 +49,9 @@ class AiBotEngine(
     private var waitStreak = 0
     private var recoverStreak = 0
     private var undecidedStreak = 0
+
+    /** 刷新"点下但列表没变"的连续次数（第二轮红队 R1 止损，与 BotEngine 同步）。 */
+    private var refreshUnverifiedStreak = 0
     private var opCount = 0
     /** 感知诊断计数（每 3 轮打一次识别细节，用于定位"识别不到候选"类问题）。 */
     private var dbgCount = 0
@@ -63,6 +66,65 @@ class AiBotEngine(
 
     /** 网络异常弹窗连续重试次数（见 retryNet）。 */
     private var netRetryStreak = 0
+
+    /**
+     * 同一行「弹窗验证反复不过」的次数（2026-09-20 补齐，对齐 BotEngine.rowVerifyAttempts）。
+     *
+     * 为什么必须补：BotEngine 早就有这条独立预算（[Tuning.ROW_VERIFY_MAX_ATTEMPTS]），
+     * 但 AI 引擎在验证失败时直接 `return Phase.RECOVER`，**从未走过任何行级预算** ——
+     * 2026-09-20 生产日志实测：同一行「买 → 取消 → 再买」重复 2472 次、只买到 8 件、
+     * 4.4 小时满速空转（手机严重发烫），期间没有任何机制叫停。
+     *
+     * 边界与 BotEngine 一致：只统计「弹窗出现了但内容对不上」（确定性失败）；
+     * 「点击没生效、弹窗根本没出现」不在其列（那种要继续保留该行，漏买优先）。
+     * 刷新/滑动会清空（见 resetRowVerifyAttempts），不是永久跳过。
+     */
+    private val rowVerifyAttempts = HashMap<Int, Int>()
+
+    /**
+     * 上一帧的缓存（Bitmap + 识别结果），供紧接着的决策阶段复用。
+     *
+     * **为什么**（2026-09-20 功耗优化，依据生产日志）：OBSERVE 已经完整识别了一帧
+     * （OCR 354ms + YOLO 241ms），但它只用 scene 做路由就把整帧丢掉；紧接着
+     * DECIDE_TARGETS 又对**同一画面**重新截图识别一遍 —— 中间没有任何动作，画面不可能变。
+     * 生产日志实测：这两个阶段分别消耗 2489 / 2529 帧，占全部完整识别的 40%，是纯重复劳动。
+     *
+     * 复用**零风险**：同一帧画面 → 同一份识别结果 → 完全相同的决策输入，
+     * 既不改动任何阈值，也不影响漏买/误买判据。
+     *
+     * 唯一约束：任何**动作**（点击 / 滑动 / 刷新）之后必须丢弃缓存 —— 绝不能让决策
+     * 建立在"动作发生前的旧画面"上。[takePendingFrame] 取出即清空，天然保证一帧只复用一次。
+     */
+    private var pendingFrame: Pair<Bitmap, DetectionResult>? = null
+
+    /**
+     * 复用缓存而省下的完整识别次数（2026-09-20 功耗优化的**可验证指标**）。
+     *
+     * 为什么要有它：优化如果不可量化，就无法证明"真的生效了"（项目的举证原则：
+     * 一条假 OK 比没有记录更危险）。会话结束时随 Summary 一起输出，
+     * 下次真机挂机即可用日志核对省下了多少次 OCR+YOLO。
+     */
+    private var reusedFrames = 0
+
+    /** 交出缓存的帧（取出即清空，保证一帧只被复用一次）。 */
+    private fun takePendingFrame(): Pair<Bitmap, DetectionResult>? {
+        val f = pendingFrame
+        pendingFrame = null
+        if (f != null) reusedFrames++
+        return f
+    }
+
+    /** 存下本帧供下一阶段复用；旧缓存（若有）先回收，避免 Bitmap 泄漏。 */
+    private fun stashPendingFrame(p: Pair<Bitmap, DetectionResult>) {
+        pendingFrame?.let { recycle(it.first) }
+        pendingFrame = p
+    }
+
+    /** 丢弃缓存并回收其 Bitmap（会话收尾 / 预算提前结束等不再复用时调用）。 */
+    private fun dropPendingFrame() {
+        pendingFrame?.let { recycle(it.first) }
+        pendingFrame = null
+    }
 
     /** A3 店铺状态跟踪器（观测层）：只记录状态变迁供诊断，不参与任何决策。 */
     private val stateTracker = ShopStateTracker()
@@ -122,13 +184,16 @@ class AiBotEngine(
             host.log("E7SA.Crash", e.stackTraceToString().lineSequence().take(6).joinToString(" | "))
             host.setError(host.str(R.string.err_exception, "${e.javaClass.simpleName}: ${e.message ?: "(no message)"}"))
         } finally {
+            // 缓存帧若还没被取用（预算提前达成 / 异常退出等）必须回收，避免 Bitmap 泄漏
+            dropPendingFrame()
             session!!.endTime = System.currentTimeMillis()
             // 会话级量化汇总：与 BotEngine 同格式（见其 finally 里的判读说明）
             host.log(
                 "E7SA.Summary",
                 "ai seen=$seenCandidates bought=${session!!.bookmarksGot + session!!.medalsGot} " +
                     "refreshes=${session!!.refreshes} sky=${session!!.skystonesSpent} " +
-                    "gold=${session!!.goldSpent} dropHandledRow=$droppedByHandledRow"
+                    "gold=${session!!.goldSpent} dropHandledRow=$droppedByHandledRow " +
+                    "reusedFrames=$reusedFrames（复用识别结果省下的完整识别次数）"
             )
             host.commitSession(session!!)
             host.finish()
@@ -139,7 +204,16 @@ class AiBotEngine(
 
     private fun shot(): Pair<Bitmap, DetectionResult>? {
         val b = host.screenshot() ?: return null
+        // C1 分项计时（2026-09-22，与 BotEngine 同口径，便于两条管线横向对比）。
+        // 同时记录这一段的进程 CPU 时间：并行度 = analyzeCpu / analyze。
+        val t0 = System.currentTimeMillis()
+        val cpu0 = com.e7.shop.device.Profiler.cpuMs()
         val r = vision.analyze(b)
+        val wall = System.currentTimeMillis() - t0
+        val cpu = com.e7.shop.device.Profiler.cpuMs() - cpu0
+        com.e7.shop.device.Profiler.record("analyze", wall)
+        if (cpu > 0) com.e7.shop.device.Profiler.record("analyzeCpu", cpu)
+        com.e7.shop.device.Profiler.count("shot")
         // 帧级感知追踪：与 BotEngine 同策略（有候选必记、无候选采样）。
         // 两条管线的日志格式必须一致，否则复盘时无法横向对比。
         dbgCount++
@@ -161,11 +235,31 @@ class AiBotEngine(
     private fun s(): RecordStore.Session = session!!
 
     private fun capsReached(): Boolean {
+        // 运行时长到点（2026-09-20 新增）：与"持有量达标"同属正常收工。
+        // 放在这里而不是每个调用点，是为了让全部检查点一次覆盖、不可能遗漏。
+        if (runTimeReached()) return true
         val c = host.cfg
         val hit = (c.bookmarkCap > 0 && s().bookmarksGot >= c.bookmarkCap) ||
             (c.medalCap > 0 && s().medalsGot >= c.medalCap)
         if (hit) host.markCompleted()   // 持有量达标也是"正常完成任务"
         return hit
+    }
+
+    /**
+     * 运行时长到点（[com.e7.shop.data.AppConfig.maxRunMinutes] 分钟，0 = 不限）。
+     *
+     * 与持有量达标**同层**：都属于正常收工 —— 走 markCompleted 路径，
+     * 因此 autoLockOnDone（预算用完自动熄屏）对它同样生效；
+     * 而异常中止（截图失败、等待超时）不熄屏，因为玩家需要看屏幕排查。
+     */
+    private fun runTimeReached(): Boolean {
+        val limit = host.cfg.maxRunMinutes
+        if (limit <= 0) return false
+        val runMin = (System.currentTimeMillis() - s().startTime) / 60000.0
+        if (runMin < limit) return false
+        host.setError(host.str(R.string.err_run_time, limit))
+        host.markCompleted()
+        return true
     }
 
     private fun kindEnabled(kind: String): Boolean =
@@ -178,6 +272,8 @@ class AiBotEngine(
      * 却仍被当成"已处理"而永久跳过。
      */
     private fun keepCandidate(c: Candidate): Boolean {
+        // 与 BotEngine 同口径：每评估一个候选就 +1（漏买复盘的分子）
+        seenCandidates++
         if (!kindEnabled(c.kind)) {
             host.log("E7SA.Filt", "ai drop ${c.kind}@${c.rowY} reason=kind-disabled")
             return false
@@ -200,6 +296,36 @@ class AiBotEngine(
             s().goldSpent += Tuning.MEDAL_PRICE
         }
         host.counters(s())
+    }
+
+    /**
+     * 「弹窗验证反复不过」的独立预算（2026-09-20，对齐 BotEngine.noteVerifyFailure）。
+     *
+     * 与 verifyDialog 的「点击后未出现弹窗」分工明确：后者是**暂时性失败**
+     * （点击可能没生效，永远保留该行，漏买优先）；这里只治**确定性失败** ——
+     * 弹窗已经出现、内容却对不上（价格读不出 / 图标不符 / 商品名不是目标）。
+     * 同样的画面再点一次还是同样结果，所以达到 [Tuning.ROW_VERIFY_MAX_ATTEMPTS]
+     * 后暂时放弃该行，避免无限锤同一个按钮。
+     *
+     * 这是 2026-09-20 那次 4.4 小时活锁的直接堵漏：AI 引擎此前验证失败即
+     * `return Phase.RECOVER`，从未走过任何行级预算。
+     */
+    private fun noteVerifyFailure(t: Candidate) {
+        val n = (rowVerifyAttempts[t.rowY] ?: 0) + 1
+        rowVerifyAttempts[t.rowY] = n
+        if (n >= Tuning.ROW_VERIFY_MAX_ATTEMPTS) {
+            host.handledAdd(t.rowY)
+            host.log(
+                "E7SA.Row",
+                "ai VERIFY FAIL x$n kind=${t.kind} rowY=${t.rowY} -> 暂时放弃该行" +
+                    "（刷新后重置，避免反复锤同一个按钮）"
+            )
+        } else {
+            host.log(
+                "E7SA.Row",
+                "ai VERIFY FAIL x$n kind=${t.kind} rowY=${t.rowY} -> 再试（上限 ${Tuning.ROW_VERIFY_MAX_ATTEMPTS}）"
+            )
+        }
     }
 
     private fun budgetBlocked(): Boolean {
@@ -254,31 +380,41 @@ class AiBotEngine(
         val p = shot() ?: return Phase.WAIT
         host.setStage(Stage.CHECKING)
         val scene = p.second.scene
-        // 会话级感知统计：识别层这一帧"看见"了几个候选（漏买复盘的分子来源）
-        seenCandidates += p.second.candidates.size
-        recycle(p.first)
+        // 会话级感知统计（2026-09-22 口径对齐）：原先在这里按"每帧候选数"累加，
+        // 而 decideTargets 可能复用 pendingFrame 不经过 observe、且候选还要过 keepCandidate
+        // 过滤 —— 两处口径不一致会让 seen 与 bought 对不上（实测 seen=2 / bought=20，
+        // 反而误导漏买判断）。现在与 BotEngine 一致：在 keepCandidate 里每个候选 +1。
         host.log("E7SA.AI", "scene=$scene")
         return when (scene) {
             Scene.SHOP_LIST -> {
                 waitStreak = 0
                 recoverStreak = 0
                 netRetryStreak = 0   // 画面正常了：清零网络重试计数
+                // 这一帧**不回收**：交给紧接着的 DECIDE_TARGETS 复用（见 pendingFrame）。
+                // 两者之间没有任何动作，画面不可能变 —— 再截图识别一次纯属浪费。
+                stashPendingFrame(p)
                 Phase.DECIDE_TARGETS
             }
             Scene.BUY_DLG -> {
+                recycle(p.first)
                 host.setError(host.str(R.string.err_recover_buy_dlg))
                 Phase.RECOVER
             }
             Scene.REFRESH_DLG -> {
+                recycle(p.first)
                 host.setError(host.str(R.string.err_recover_refresh_dlg))
                 Phase.RECOVER
             }
             Scene.NET_ERROR -> {
                 // 网络异常弹窗（2026-09-19）：点重试后回到 OBSERVE 继续正常流程
+                recycle(p.first)
                 host.setError(host.str(R.string.err_net_error))
                 Phase.RETRY_NET
             }
-            Scene.OTHER -> Phase.WAIT
+            Scene.OTHER -> {
+                recycle(p.first)
+                Phase.WAIT
+            }
         }
     }
 
@@ -336,14 +472,17 @@ class AiBotEngine(
      *  全部处理完 → 揭示第 6 格 → 刷新。
      */
     private fun decideTargets(): Phase {
-        if (capsReached()) return Phase.DONE
+        if (capsReached()) { dropPendingFrame(); return Phase.DONE }
         // **金币/天空石预算闸门必须在这里也检查**。
         // 此前 budgetBlocked() 只在 revealSlot / clickRefresh（下滑与刷新）两处调用，
         // 购买决策路径完全没有预算检查 —— 后果是：金币花光后仍会继续尝试购买，
         // 买不起就失败，然后继续刷新，**每刷新一次白烧 3 颗天空石**。
         // 这是玩家明确担心的损失，必须在"决定买不买"这一步就拦住。
-        if (budgetBlocked()) return Phase.DONE
-        val p = shot() ?: return Phase.WAIT
+        if (budgetBlocked()) { dropPendingFrame(); return Phase.DONE }
+        // 优先复用 OBSERVE 刚识别过的那一帧（见 pendingFrame）：两者之间没有任何动作，
+        // 画面不可能变，再截图识别一次纯属浪费。没有缓存时才自己取帧 —— 本阶段也可能由
+        // revealSlot / clickRefresh / verifyClosed 等路径进入，那时行为与优化前完全一致。
+        val p = takePendingFrame() ?: (shot() ?: return Phase.WAIT)
         val snap = p.second
         if (snap.scene != Scene.SHOP_LIST) {
             recycle(p.first)
@@ -470,13 +609,27 @@ class AiBotEngine(
             // 直接拿它做三重验证会失败 → 取消 → 重买（玩家实测到的"点了取消又重新买"）。
             // 这里补一个短等待并重新取帧，确保验证用的是稳定帧。
             host.sleepMs(host.randInt(Tuning.DIALOG_SETTLE_MIN_MS, Tuning.DIALOG_SETTLE_MAX_MS).toLong())
-            val stable = shot()
-            if (stable != null && stable.second.scene == Scene.BUY_DLG) {
-                recycle(dlg.first)
-                lastDlg = stable
-            } else {
-                if (stable != null) recycle(stable.first)
+            // 省一次完整识别（2026-09-20 功耗优化）：补等待之后先只截一张图做像素比对 ——
+            // 与探测帧**完全相同**说明弹窗已经渲染完（没有渐显动画），此时复用探测帧的
+            // 识别结果与重新识别**结果必然一致**，纯省下 547ms（OCR 354 + YOLO 241）。
+            // 只要画面有任何变化（动画未结束 / 内容更新）就走原来的重新识别路径，
+            // 所以"稳定帧"的可靠性一点没降。
+            val settleBmp = host.screenshot()
+            if (settleBmp != null && frameNearlyIdentical(dlg.first, settleBmp)) {
+                recycle(settleBmp)
                 lastDlg = dlg
+                reusedFrames++
+                host.log("E7SA.AI", "dialog settled identical -> reuse perception（省一次完整识别）")
+            } else {
+                if (settleBmp != null) recycle(settleBmp)
+                val stable = shot()
+                if (stable != null && stable.second.scene == Scene.BUY_DLG) {
+                    recycle(dlg.first)
+                    lastDlg = stable
+                } else {
+                    if (stable != null) recycle(stable.first)
+                    lastDlg = dlg
+                }
             }
             return Phase.CONFIRM_PURCHASE
         }
@@ -530,13 +683,19 @@ class AiBotEngine(
         if (!dialogConfirmed(dlg.second, dlg.first, t.kind)) {
             // 与 BotEngine 同样的区分逻辑：只有"弹窗里的商品名明确是别的东西"才算点错行。
             // 若一律放弃，会把"价格/图标 OCR 暂时抖动"误判成点错行而漏买。
-            val dlgKind = dialogItemKind(dlg.second.lines)
+            //
+            // ⚠ 只看**弹窗内容区**（2026-09-20）：整帧里弹窗外的列表行会让这里误判
+            // "点错行"，从而放弃一个本来能买到的目标（漏买）。
+            val dlgKind = dialogLines(dlg.second, dlg.first.height)?.let { dialogItemKind(it) }
             if (dlgKind != null && dlgKind != t.kind) {
                 host.handledAdd(t.rowY)
                 host.setError(host.str(R.string.err_row_wrong_target, t.kind, t.rowY))
                 host.log("E7SA.AI", "WRONG TARGET kind=${t.kind} rowY=${t.rowY} dialogKind=$dlgKind -> 放弃该行并取消")
             } else {
                 host.log("E7SA.AI", "dialog verify FAIL kind=${t.kind} rowY=${t.rowY} dialogKind=${dlgKind ?: "?"} -> 取消后重试")
+                // 弹窗出现了但内容对不上 = 确定性失败 → 走行级预算（2026-09-20 补齐）。
+                // 没有这一步时，同一行会无限"买 → 取消 → 再买"（实测 2472 次）。
+                noteVerifyFailure(t)
             }
             recycle(dlg.first)
             return Phase.RECOVER
@@ -682,7 +841,9 @@ class AiBotEngine(
             // 等画面稳定后再识别（滑动惯性/加载中不急着判断）
             val after = captureStableFrame(6)
             if (after == null) { shotFails++; recycle(before); continue }
+            val tb = System.currentTimeMillis()
             val moved = didScroll(before, after.first)
+            com.e7.shop.device.Profiler.record("didScroll", System.currentTimeMillis() - tb)
             recycle(before)
             val snap = after.second
             recycle(after.first)
@@ -695,7 +856,11 @@ class AiBotEngine(
             //
             // 而清空的本意是"滑动后内容变了、同一 y 已是另一件商品"（漏买修复）——
             // 画面没动时这个前提不成立，位置记忆依然有效，清空反而制造了死循环。
-            if (moved) host.handledClear()
+            if (moved) {
+                host.handledClear()
+                // 画面真动了 = 同一 y 已是另一件商品，验证预算随之重置（对齐 BotEngine）
+                rowVerifyAttempts.clear()
+            }
             val targets = snap.candidates.filter { c -> keepCandidate(c) }
             // 逐次留痕（2026-09-19）：AI 管线此前**完全不记录滑动次数** ——
             // 日志里只有 phase=REVEAL_SLOT → phase=CLICK_REFRESH，中间滑了几次、
@@ -816,13 +981,41 @@ class AiBotEngine(
             // 否则安全网会被**正常**的"这一轮没东西可买"累积触发（实测 01:33:10 误触发过一次），
             // 那样会跳过 revealSlot 的上滑，可能漏掉第 6 格。
             idleDecideStreak = 0
+            // ⚠ 位置记忆**在这里就清**（2026-09-21 漏买修复 P0-1）：
+            //
+            // 刷新一旦确认点下，列表必然会被换成新商品 —— 旧的 y 标记此刻已经失效。
+            // 旧版把清除放在 `waitShopLoaded` 成功之后：一旦刷新验证失败（网络慢、
+            // 画面没稳定、点击被模态框吃掉），标记就残留下来，而**新列表里落在同一行的商品**
+            // 会被 keepCandidate 当成"已处理"跳过 = **漏买**（实测一夜 dropHandledRow=86、
+            // 涉及 29 个位置，其中 14 个只被跳过一次 —— 正是"另一件商品移到同一位置"的特征）。
+            //
+            // 提前清除**不会**导致重复购买：即使刷新实际失败、列表没变，买过的商品
+            // 按钮已变"售罄"，rowButtonState 会返回 GRAY，根本点不了第二次。
+            // （旧注释担心的"把旧列表当新列表会重复购买"是个假想风险 —— 真正的代价却是漏买。）
+            host.handledClear()
+            rowVerifyAttempts.clear()
         } else {
             host.log("E7SA.Gate", "REFRESH NOT COMMITTED: 确认点击被闸门拒绝（未花钱，不记账）")
         }
         val next = waitShopLoaded(refreshBeforeFp ?: "", "刷新后商店列表未就绪")
         if (next == Phase.DECIDE_TARGETS) {
             host.handledClear()
+            // 刷新验证通过 = 全新一轮商品，行级验证预算随之重置（对齐 BotEngine）
+            rowVerifyAttempts.clear()
             undecidedStreak = 0
+            refreshUnverifiedStreak = 0
+        } else {
+            // ⚠ 第二轮红队 R1（2026-09-22，与 BotEngine 同步）：只退避不停机的话，
+            // "刷新→记账→未验证→再刷新"能无限转（BotEngine 侧实测 44 次 / 132 颗天空石）。
+            refreshUnverifiedStreak++
+            if (refreshUnverifiedStreak >= Tuning.REFRESH_UNVERIFIED_MAX_STREAK) {
+                host.setError(host.str(R.string.err_refresh_unverified))
+                host.log(
+                    "E7SA.AI",
+                    "刷新连续未验证 x$refreshUnverifiedStreak -> 停机止损（疑似确认键点不中或网络异常，继续会持续消耗天空石）"
+                )
+                return Phase.DONE
+            }
         }
         return next
     }
@@ -848,26 +1041,42 @@ class AiBotEngine(
         var stable = 0
         var lastRows = -1
         var rowsStable = 0
+        var topRowWait = 0
         // 时序自适应：按时间预算换算帧数（慢设备自动多给帧、快设备自动收紧）
         for (i in 0 until host.framesFor(18000)) {
             host.sleepMs(host.randInt(Tuning.SHOP_LOAD_POLL_MIN_MS, Tuning.SHOP_LOAD_POLL_MAX_MS).toLong())
             val p = host.screenshot() ?: continue
             val r = vision.analyze(p)
             val fp = frameFingerprint(r)
-            val rows = r.lines.count { hasAny(it.text, BUY_KW) || hasAny(it.text, SOLD_KW) }
+            val buyLines = r.lines.filter { hasAny(it.text, BUY_KW) || hasAny(it.text, SOLD_KW) }
+            val rows = buyLines.size
             // 行数是否已停止增长。要求连续 **3 帧** 相同（rowsStable>=2）而不是 2 帧：
             // 网络抖动会让加载中途出现"两帧恰好相同"的假稳定，只等 2 帧就可能被骗过、
             // 在列表尚未加载完时下滑 → 漏掉第一物品栏（玩家实测到的现象）。
             // 多等一帧约 0.9 秒，换的是不漏格。
             if (rows == lastRows) rowsStable++ else rowsStable = 0
             lastRows = rows
-            // 最小门槛 5 行：正常一屏 8~10 行；低于 5 行几乎可以确定还在加载中
+            // ⚠ 2026-09-22 玩家实测修复（网络延迟时第一格还没渲染完就下滑）：
+            // ① 门槛 5 → 8：正常一屏 8~10 行（run_20260922_191416 实测 rows=8/9/10）；
+            //    网络慢时下面的格子先出来，rows 到 5 就被判"加载完成" → 下滑 → 漏第一格。
+            // ② 加"首行内容就绪"：最上面那一行附近必须已有图标候选或商品名 ——
+            //    只有「购买」按钮先渲染、商品内容还没出来时同样会漏格。
+            // ③ 但不死等：首行迟迟不就绪时最多多等 3 帧放行，避免网络真慢时卡成未验证。
+            val topY = buyLines.minOfOrNull { it.cy }
+            val topRowReady = topY == null ||
+                r.candidates.any { kotlin.math.abs(it.cy - topY) < 130f } ||
+                r.lines.any { itemKind(it.text) != null && kotlin.math.abs(it.cy - topY) < 130f }
+            if (rows >= 8 && rowsStable >= 2 && !topRowReady) topRowWait++
             val loaded = r.scene == Scene.SHOP_LIST &&
-                rows >= 5 && rowsStable >= 2
+                rows >= 8 && rowsStable >= 2 && (topRowReady || topRowWait > 3)
             val changed = beforeFp.isEmpty() || fp != beforeFp
             var nowStable = false
             if (prev != null) {
-                if (didScroll(prev, p)) stable = 0 else stable++
+                // C1 埋点：didScroll 是纯像素扫描（采样窗 2M+ 像素），最大嫌疑之一
+                val tb = System.currentTimeMillis()
+                val scrolled = didScroll(prev, p)
+                com.e7.shop.device.Profiler.record("didScroll", System.currentTimeMillis() - tb)
+                if (scrolled) stable = 0 else stable++
                 nowStable = stable >= 1
             }
             recycle(prev)
@@ -897,8 +1106,10 @@ class AiBotEngine(
         for (i in 0 until attempts) {
             host.sleepMs(host.randInt(Tuning.SLOT6_POLL_MIN_MS, Tuning.SLOT6_POLL_MAX_MS).toLong())
             val p = host.screenshot() ?: continue
-            // 轻量探测：只为"画面是否还在动"服务，不需要 OCR
-            engine_hasIconFast(p)
+            // 这里原先还调了一次 engine_hasIconFast(p)，但它的**返回值从未被使用**
+            // （稳定判定完全由下面的 didScroll 像素比对决定）—— 非睡眠模式下每帧白跑
+            // 一次 YOLO（约 45ms）。2026-09-20 功耗优化删除；睡眠模式本就不跑检测，
+            // 因此这次删除对睡眠模式的语义（保证不漏看整屏）没有任何影响。
             if (prev != null) {
                 if (didScroll(prev, p)) stable = 0 else stable++
             }
@@ -915,26 +1126,11 @@ class AiBotEngine(
         return bmp to r
     }
 
-    /**
-     * 轻量探测包装（只为稳定判定服务，结果不参与决策）。
-     *
-     * 失败不向上抛 —— 探测只决定"画面还在不在动"，它不是决策依据，
-     * 抛出去会打断整条稳定判定链路。捕 Throwable 而非 Exception 与项目内
-     * 其他 native 调用（YoloDet / PpOcr）保持一致：native 失败可能表现为
-     * UnsatisfiedLinkError 这类 Error。
-     *
-     * **但必须留痕**：这是全项目唯一一处完全静默的 catch。静默会让
-     * "探测持续失败"表现为"画面一直不稳定"，最终卡在 WAIT 阶段，
-     * 而日志里查不到任何原因。这里每帧都会调用，正常情况下不应失败，
-     * 一旦刷屏本身就是最直接的故障信号。
-     */
-    private fun engine_hasIconFast(bmp: Bitmap) {
-        try {
-            vision.hasIconFast(bmp)
-        } catch (e: Throwable) {
-            host.log("E7SA.AI", "hasIconFast failed: ${e.javaClass.simpleName}: ${e.message}")
-        }
-    }
+    /* 注：原先这里还有一个 engine_hasIconFast 包装函数（每帧跑一次 YOLO 做轻量探测）。
+     * 2026-09-20 功耗优化时删除：它唯一的调用点返回值从未被使用，稳定判定完全由
+     * didScroll 像素比对决定 —— 也就是说它每帧白跑一次 YOLO（约 45ms）。
+     * 删除后 AI 引擎不再调用 hasIconFast，睡眠模式对 AI 管线不再有任何行为影响
+     * （它本来就每帧走完整识别，语义不变）。 */
 
     /* ---------------- 阶段：恢复与等待 ---------------- */
 
@@ -959,8 +1155,15 @@ class AiBotEngine(
         val pt = planner.modelButton(p.second, "cancel_button")
             ?: planner.cancelButton(p.second.lines, p.first)
         if (pt != null) {
-            host.log("E7SA.AI", "cancel tap=(${pt.first.toInt()},${pt.second.toInt()})")
+            host.log("E7SA.AI", "cancel tap=" + pt.first.toInt() + "," + pt.second.toInt())
             host.guardedTap(pt.first, pt.second, "aiCancel")
+        } else {
+            // ⚠ 2026-09-22 修复（真机 21:10:29 实测卡了 2 分钟）：找不到「取消」按钮时
+            // 原先什么都不做 → RECOVER 秒进秒出 → 只能靠 7 次 × 16 秒退避空转，
+            // 直到两分钟后画面自己变了才点掉。
+            // 现在退化为 BACK：它是关闭任意弹窗的通用手段，且绝不会误触购买/确认。
+            host.log("E7SA.AI", "cancel 按钮未找到 -> 退化为 BACK 关闭弹窗")
+            host.pressBack()
         }
         recycle(p.first)
         host.sleepMs(Tuning.SETTLE_AFTER_RECYCLE_MS)

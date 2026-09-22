@@ -28,6 +28,22 @@ object PpOcr {
     /** Returns one string per text box: "text\tcx\tcy\tprob" (original pixels). */
     @JvmStatic external fun nativeOcr(bitmap: Bitmap): Array<String>?
 
+    /**
+     * 运行时设置 OCR **det** 的推理线程数（2026-09-20 新增，供对比实验）。
+     * 返回实际生效值；**-1 表示模型尚未加载**。
+     *
+     * ⚠ **只影响 det**：rec 在 `detect_and_recognize` 的任务级并行循环里
+     * （`#pragma omp parallel for num_threads(ncnn::get_big_cpu_count())`），
+     * 若每个并行任务内部再开多线程，总线程数会变成"大核数 × t"而严重超额，
+     * 因此 native 侧刻意不对 rec 生效。
+     *
+     * 默认值仍是 1，生产路径不调用它。
+     */
+    @JvmStatic external fun nativeSetThreads(threads: Int): Int
+
+    /** 设置 det 推理线程数（0/负数 = 回到默认 1）。返回实际生效值，-1 = 模型未加载。 */
+    fun setThreads(n: Int): Int = try { nativeSetThreads(n) } catch (e: Throwable) { -1 }
+
     fun load(mgr: AssetManager): Boolean = try { nativeLoad(mgr) } catch (e: Throwable) { false }
 
     data class OcrLine(val text: String, val cx: Float, val cy: Float, val prob: Float)

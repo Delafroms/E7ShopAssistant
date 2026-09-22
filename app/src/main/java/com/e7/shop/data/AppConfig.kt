@@ -195,6 +195,49 @@ class AppConfig(context: Context) {
         set(v) = sp.edit().putBoolean("sleepMode", v).apply()
 
     /**
+     * 推理线程数（YOLO + OCR-det 的 ncnn `opt.num_threads`），取值 1..8。
+     *
+     * **默认 1 = 与历史行为完全一致**（单线程原本是为规避真 libomp 崩溃而选的）。
+     * 实测（2800×1272 真机，2026-09-20）：**2 线程每帧最快**（YOLO −22%、合计 −16%）；
+     * 4 及以上无收益（并行度饱和，ncnn 部分算子如 depthwise 卷积并行度有限）。
+     * 取值在这里夹取，UI 滑杆与运行时共用同一区间。
+     *
+     * ⚠ 只影响 ncnn 算子并行度；**OpenCV 仍必须保持单线程**（见 e7ocr.cpp 里
+     * __kmpc_dispatch_* 桩的说明：提高 cv::setNumThreads 会让并行循环退化），
+     * 两者不可混为一谈。
+     */
+    var yoloThreads: Int
+        get() = sp.getInt("yoloThreads", 1).coerceIn(1, 8)
+        set(v) = sp.edit().putInt("yoloThreads", v.coerceIn(1, 8)).apply()
+
+    /**
+     * 最长运行时长（分钟，**0 = 不限**）。
+     *
+     * 到点后**无论金币/天空石/持有量是否达上限，都停止挂机** —— 用于"我只需要挂两小时"
+     * 这类场景，避免刷满预算后继续空转。
+     *
+     * 停止语义与"预算达成"一致（走 [markCompleted] 路径，因此 [autoLockOnDone] 仍然生效），
+     * 属于**正常收工**而不是异常中止 —— 异常中止不熄屏，因为玩家需要看屏幕排查。
+     *
+     * 负值在读写两端都夹到 0：设置项虽然只接受数字输入，但配置可能被旧版本或外部导入
+     * 写成负数，运行时再夹一次才可靠。
+     */
+    var maxRunMinutes: Int
+        get() = sp.getInt("maxRunMinutes", 0).coerceAtLeast(0)
+        set(v) = sp.edit().putInt("maxRunMinutes", v.coerceAtLeast(0)).apply()
+
+    /**
+     * 桌面图标选择（2026-09-20 新增）：`default`（现有图标，**永不删除**）/ `e7`（E7SA 专属）
+     * / `ba`（Blue Archive 风格）。实际切换见 [com.e7.shop.ui.IconSwitcher]。
+     *
+     * 只存"想要哪个"，不在这里做切换 —— 切换要碰 PackageManager，属于 UI/系统层职责。
+     * 未知值一律按 default 处理（读到脏数据也不至于让桌面图标消失）。
+     */
+    var iconVariant: String
+        get() = sp.getString("iconVariant", "default") ?: "default"
+        set(v) = sp.edit().putString("iconVariant", v).apply()
+
+    /**
      * 任务完成后自动熄屏：金币/天空石/持有量达到上限而停止时，自动执行熄屏。
      *
      * 场景：睡前挂机，资源刷完后自动熄屏省电，不必半夜起来手动关屏。
@@ -241,7 +284,24 @@ class AppConfig(context: Context) {
     /** Material-Theme appearance: "dark" (Material 3 Steam) | "oled" (pure black). */
     var appearance: String
         get() = sp.getString("appearance", "dark") ?: "dark"
-        set(v) = sp.edit().putString("appearance", v).apply()
+        set(v) {
+            sp.edit().putString("appearance", v).apply()
+            // 同步记录"离开时用的主题"（2026-09-20 主题化进出场动画）：
+            // 进入动画按**上次用的主题**播放 —— "女仆等你回家"的语义就靠这个值。
+            // 放在 setter 而不是 Activity.onStop：语义等价（改了主题总要通过退出/重启才看到动画），
+            // 但不依赖 Activity 生命周期，也不会漏掉"改完主题直接从最近任务划掉"这条路径。
+            sp.edit().putString("lastTheme", v).apply()
+        }
+
+    /**
+     * 上次离开 App 时所用的主题（2026-09-20 新增）。
+     *
+     * 用途：进入动画据此决定"谁来迎接你"。空字符串 = 从未记录过，
+     * 调用方应回落到当前 [appearance]。
+     */
+    var lastTheme: String
+        get() = sp.getString("lastTheme", "") ?: ""
+        set(v) = sp.edit().putString("lastTheme", v).apply()
 
     /** Show the entry splash animation (heyyo x E7SA). Player can disable it. */
     var showSplash: Boolean

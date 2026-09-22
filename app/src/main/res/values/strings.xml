@@ -47,11 +47,19 @@
     <string name="auto_lock_on_done">Lock screen when budget reached</string>
     <string name="acc_exempt">Accessibility keep-alive exemption (this app only)</string>
     <string name="speed_mult">Speed multiplier 1-3x (faster cycles, same rewards)</string>
+    <string name="infer_threads">Inference threads 1-8 (2 = fastest in testing; 4+ gives no gain)</string>
+    <string name="max_run_minutes">Max run time in minutes (0 = unlimited; stops when time is up regardless of budget)</string>
+    <string name="err_run_time">Run time limit reached (%1$d min)</string>
+    <string name="icon_choice">App icon</string>
+    <string name="icon_default">Current</string>
+    <string name="icon_e7">E7SA</string>
+    <string name="icon_ba">Blue Archive</string>
     <string name="ocr_engine">Recognition engine</string>
     <string name="ocr_engine_yolo">YOLO Vision</string>
     <string name="appearance_dark">Steam · Dark cards</string>
     <string name="appearance_oled">Steam · OLED pure black</string>
     <string name="appearance_ba">Blue Archive · Bright academy</string>
+    <string name="appearance_deepseek">DeepSeek · Deep blue cards</string>
     <string name="changelog">Changelog</string>
     <string name="humanize_settings">Human-like behavior (lower detection risk)</string>
     <string name="delay_min">Delay min (ms)</string>

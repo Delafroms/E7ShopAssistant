@@ -46,6 +46,20 @@ public:
 
     void set_det_target_size(int target_size);
 
+    /**
+     * 运行时设置推理线程数（2026-09-20 新增，用于"线程数 vs 单帧耗时"对比实验）。
+     *
+     * 默认仍是 1（在 load 里设置）。单线程原本是为规避**真 libomp** 的
+     * __kmp_affinity_initialize 崩溃；现在链接的是 ncnn 自带的 simpleomp
+     * （NCNN_SIMPLEOMP=ON，无 affinity 代码），那条崩溃路径已不存在。
+     *
+     * ⚠ 只影响 **ncnn 算子**的并行度。**OpenCV 仍必须保持单线程** ——
+     * simpleomp 不提供 opencv parallel.cpp 需要的 dispatch 符号，提高
+     * cv::setNumThreads 会让并行循环退化（历史上曾导致"全零输出"），
+     * 见 e7ocr.cpp 顶部关于 __kmpc_dispatch_* 桩的说明。两者不要混为一谈。
+     */
+    void set_num_threads(int threads);
+
     virtual int detect(const cv::Mat& rgb, std::vector<Object>& objects) = 0;
     virtual int draw(cv::Mat& rgb, const std::vector<Object>& objects) = 0;
 

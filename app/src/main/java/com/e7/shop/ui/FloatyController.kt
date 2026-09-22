@@ -248,6 +248,21 @@ class FloatyController(
             cornerDp = 20f, headerGradient = true, headerStripes = true, headerDots = true,
             tapeCorners = true, flatButtons = false, logPrefix = "✎", mono = false
         )
+        "deepseek" -> FloatySpec(
+            // DeepSeek 主题的悬浮窗（2026-09-20）：品牌蓝头 + 深蓝底。
+            // **圆角刻意取到 22dp（四个户型里最大）**：竖向卡片流的"软"观感，
+            // 与 Steam(12) / OLED(10) / BA(20) 都不同 —— 这是"悬浮窗也要和其他主题不同"的落点。
+            body = 0xF5161C2A.toInt(), headerTop = 0xFF4D6BFE.toInt(), headerBottom = 0xFF2A3A8F.toInt(),
+            edge = 0xFF4D6BFE.toInt(), text = 0xFFE6EAF5.toInt(), sub = 0xFF8B96BB.toInt(),
+            run = 0xFF4D6BFE.toInt(), warn = 0xFFFF6B6B.toInt(),
+            statColors = listOf(0xFF4D6BFE.toInt(), 0xFF7C93FF.toInt(), 0xFF38BDF8.toInt(),
+                0xFFB066E8.toInt(), 0xFFD4AF37.toInt(), 0xFF8B96BB.toInt()),
+            startC1 = 0xFF4D6BFE.toInt(), startC2 = 0xFF2F4BD8.toInt(), startText = 0xFFFFFFFF.toInt(),
+            pauseC1 = 0xFFF0A020.toInt(), pauseC2 = 0xFFB8860B.toInt(), pauseText = 0xFF2A2004.toInt(),
+            stopC1 = 0xFFE85C4A.toInt(), stopC2 = 0xFF8B1A1A.toInt(), stopText = 0xFFFFFFFF.toInt(),
+            cornerDp = 22f, headerGradient = true, headerStripes = false, headerDots = false,
+            tapeCorners = false, flatButtons = false, logPrefix = "🐋", mono = false
+        )
         "oled" -> FloatySpec(
             body = 0xF5000000.toInt(), headerTop = 0xFF050505.toInt(), headerBottom = 0xFF050505.toInt(),
             edge = 0xFF3D4450.toInt(), text = 0xFFE7ECFF.toInt(), sub = 0xFF8B96BB.toInt(),
@@ -436,6 +451,8 @@ class FloatyController(
 
     /** 把 BotState / 事件日志渲染进胶囊与任务面板。 */
     fun refreshContent() {
+        // C1 分项计时（2026-09-22）：悬浮窗每帧刷新 UI 文本，怀疑是"看不见的 CPU 大头"之一。
+        val t0 = System.currentTimeMillis()
         val spec = floatySpec()
         val stageText = ctx.getString(stageTextRes())
         val elapsed = if (ctx.state.startedAt > 0) System.currentTimeMillis() - ctx.state.startedAt else 0
@@ -450,6 +467,8 @@ class FloatyController(
         // 经典户型继续走下面的既有逻辑（已验证代码，不做无谓改动）。
         railSkin?.let { skin ->
             skin.render(buildState(stageText, timeTxt, hasError, engineKey))
+            com.e7.shop.device.Profiler.record("floaty", System.currentTimeMillis() - t0)
+            com.e7.shop.device.Profiler.count("floaty")
             return
         }
 
@@ -510,6 +529,8 @@ class FloatyController(
         }
         val recent = synchronized(eventLogLock) { eventLog.takeLast(6) }
         deckLog?.text = recent.joinToString("\n") { spec.logPrefix + " " + it }
+        com.e7.shop.device.Profiler.record("floaty", System.currentTimeMillis() - t0)
+        com.e7.shop.device.Profiler.count("floaty")
     }
 
     /* ---------- 背景绘制 ---------- */

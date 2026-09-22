@@ -121,4 +121,17 @@ JNIEXPORT jobjectArray JNICALL Java_com_e7_shop_bot_YoloDet_nativeDetect(JNIEnv*
     return arr;
 }
 
+// Java_com_e7_shop_bot_YoloDet_nativeSetThreads(int threads) -> int
+// 运行时切换 YOLO 推理线程数（诊断对比用；生产默认值仍是 1）。
+// 返回实际生效的线程数；-1 表示模型尚未加载（设置无效，调用方可据此判断）。
+JNIEXPORT jint JNICALL Java_com_e7_shop_bot_YoloDet_nativeSetThreads(JNIEnv* env, jobject thiz, jint threads)
+{
+    std::lock_guard<std::mutex> lock(g_yolo_mutex);
+    if (g_yolo == 0) { LOGE("nativeSetThreads: model not loaded"); return -1; }
+    const int t = (threads > 0) ? (int)threads : 1;
+    g_yolo->set_num_threads(t);
+    LOGI("nativeSetThreads: num_threads=%d", t);
+    return t;
+}
+
 } // extern "C"
